@@ -1,6 +1,8 @@
-node_modules
-dist
-*.log
+/bin/
+/dist/
+*.exe
+*.test
+*.out
 .env
 .env.*
 !.env.example

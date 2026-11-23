@@ -15,24 +15,30 @@ Point it at any MCP server (stdio or HTTP) and it:
 ## Status
 
 Early scaffold. The core introspection + probe engine is being built first;
-a live dashboard and Postman-collection export come later.
+a live terminal dashboard and Postman-collection export come later.
 
 ## Getting started
 
 ```bash
-npm install
-npm run dev -- <command to start the MCP server>
+go build -o bin/mcp-xray ./cmd/mcp-xray
+./bin/mcp-xray -- <command to start the MCP server>
 ```
 
-Requires Node.js 20 or newer.
+Requires Go 1.23 or newer.
 
 ## Architecture
 
+Written in Go, using the official
+[go-sdk](https://github.com/modelcontextprotocol/go-sdk) MCP client. The live
+dashboard is a terminal UI built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
+rather than a web frontend.
+
 ```
-src/
-  types.ts        shared types: findings, severity, capability snapshot
-  cli.ts          entry point
-  mcp/            MCP client wrapper (connect, introspect)
-  probes/         security probe implementations
-  report/         scoring and report output
+cmd/mcp-xray/      CLI entry point
+internal/
+  findings/        shared types: Finding, Severity
+  inspector/        MCP client wrapper: connect, introspect tools/resources/prompts
+  probes/          security probe implementations
+  report/          scoring and report output
+  tui/             Bubble Tea live dashboard
 ```
