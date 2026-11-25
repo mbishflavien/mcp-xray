@@ -3,401 +3,483 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mcp-xray — a security scanner for MCP servers</title>
-<meta name="description" content="mcp-xray connects to an MCP server, generates adversarial inputs from each tool's own schema, and actually calls the tool with them — sandboxed, so a malicious server can't turn the scan against the scanner.">
+<title>mcp-xray: a security scanner for MCP servers</title>
+<meta name="description" content="mcp-xray calls every tool on your MCP server with the inputs that break things, sandboxed, so nothing it finds can turn around and touch you.">
 <meta property="og:title" content="mcp-xray">
-<meta property="og:description" content="A security scanner for MCP servers whose own probes run sandboxed, not just the target.">
+<meta property="og:description" content="One less thing your team has to watch.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e16'/%3E%3Ccircle cx='14' cy='14' r='7' fill='none' stroke='%238fd6ff' stroke-width='2.5'/%3E%3Cline x1='19' y1='19' x2='26' y2='26' stroke='%238fd6ff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23181715'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23bfb21a' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-/* layout: a radiology reading-room — ambient glow + blueprint grid behind
-   the hero like a lightbox behind film, a two-column hero (claim | live
-   scan), a slow exposure sweep across the hero terminal; dark by default,
-   "lightbox" in light mode. terminal panels stay fixed-dark, like a real
-   CLI, regardless of page theme. */
+/* ── tokens ──────────────────────────────────────────────────────────── */
 :root{
-  --bg:#f3f6f9; --surface:#ffffff; --surface-2:#eef2f6; --fg:#0f1620; --muted:#5b6b7a;
-  --accent:#0f72ab; --accent-2:#5b3fd6; --accent-soft:#e3f1fa; --border:#d7e1ea;
-  --term-bg:#0a0e16; --term-fg:#e7edf3; --term-muted:#657485; --term-border:#1c2834;
-  --crit:#d6334a; --high:#c8631a; --med:#9a7c15; --low:#2f6fb0; --info:#5b6b7a;
-  --disp:'Space Grotesk',Inter,system-ui,sans-serif; --body:Inter,system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#070a10; --surface:#10161f; --surface-2:#141b26; --fg:#eaf1f7; --muted:#8694a4;
-    --accent:#7fd3ff; --accent-2:#b79bff; --accent-soft:#122534; --border:#1e2a38;
-    --crit:#ff6b6b; --high:#ffa15c; --med:#ffd666; --low:#7cc3ff; --info:#8392a1;
-    color-scheme:dark;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#070a10; --surface:#10161f; --surface-2:#141b26; --fg:#eaf1f7; --muted:#8694a4;
-  --accent:#7fd3ff; --accent-2:#b79bff; --accent-soft:#122534; --border:#1e2a38;
-  --crit:#ff6b6b; --high:#ffa15c; --med:#ffd666; --low:#7cc3ff; --info:#8392a1;
-  color-scheme:dark;
+  --bg:#e8e8e3; --surface:#dcdcd6; --ink:#181715; --muted:#48473f;
+  --accent:#9c8f16; --accent-ink:#181715;
+  --field-1:#181715; --field-1-ink:#eeeee8; --field-1-muted:#a3a19a;
+
+  --face:'Work Sans',system-ui,sans-serif;
+  --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
+  --step-body:  clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+  --step-lead:  clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+  --step-head:  clamp(2rem, 1.3rem + 3.2vw, 4rem);
+  --step-display: clamp(2.4rem, 1.4rem + 4.4vw, 4.6rem);
+
+  --margin: max(20px, env(safe-area-inset-left,0px));
+  --marginR: max(20px, env(safe-area-inset-right,0px));
+  --col: 620px;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
-body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.6;-webkit-font-smoothing:antialiased;position:relative}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.05;
-  background-image:linear-gradient(var(--fg) 1px, transparent 1px),linear-gradient(90deg, var(--fg) 1px, transparent 1px);
-  background-size:46px 46px}
-header.nav,main,footer{position:relative;z-index:1}
-.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-h1,h2,h3{font-family:var(--disp);font-weight:600;letter-spacing:-0.01em;text-wrap:balance;margin:0}
-a{color:inherit}
-.container{max-width:880px;margin:0 auto;width:100%}
-.container-wide{max-width:1160px;margin:0 auto;width:100%}
-code,.mono{font-family:var(--mono)}
-img{max-width:100%}
-::selection{background:var(--accent);color:var(--bg)}
+body{background:var(--bg);color:var(--ink);font-family:var(--face);font-weight:400;
+  line-height:1.55;-webkit-font-smoothing:antialiased;font-size:var(--step-body)}
+h1,h2,h3{font-family:var(--face);font-weight:300;letter-spacing:-0.02em;line-height:1.02;margin:0}
+p{margin:0}
+a{color:inherit;text-decoration:none}
+img,video{max-width:100%;display:block}
+.pad{padding-left:var(--margin);padding-right:var(--marginR)}
+::selection{background:var(--accent);color:var(--accent-ink)}
+button{font-family:inherit}
 
-/* nav */
-header.nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb, var(--bg) 82%, transparent);backdrop-filter:blur(10px)}
-header.nav::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;
-  background:linear-gradient(90deg,transparent,color-mix(in srgb, var(--accent) 45%, transparent),transparent)}
-.nav-inner{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-block:0.85rem}
-.wordmark{display:flex;align-items:center;gap:.55rem;font-family:var(--mono);font-weight:600;font-size:.95rem;letter-spacing:-0.02em}
-.wordmark svg{display:block}
-.nav-links{display:flex;align-items:center;gap:1.4rem;font-size:.88rem;color:var(--muted)}
+/* ── buttons: one shape, used everywhere ───────────────────────────── */
+.btn{display:inline-flex;align-items:center;height:44px;padding:0 20px;border-radius:3px;
+  font-size:var(--step-small);font-weight:500;background:var(--ink);color:var(--bg);
+  transition:background .2s ease,color .2s ease}
+.btn:hover{background:var(--accent);color:var(--accent-ink)}
+.on-dark .btn{background:var(--field-1-ink);color:var(--field-1)}
+.on-dark .btn:hover{background:var(--accent);color:var(--accent-ink)}
+.textlink{font-size:var(--step-small);font-weight:500;border-bottom:1px solid currentColor;padding-bottom:2px} /* taste-skill-ignore: a link underline, not a divider */
+.textlink:hover{color:var(--accent)}
+
+/* ── nav: plain bar ─────────────────────────────────────────────────── */
+nav.top{position:relative;z-index:5;background:var(--bg)}
+.nav-row{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;height:76px}
+.wordmark{font-size:var(--step-body);font-weight:500;letter-spacing:-0.01em;white-space:nowrap}
+.nav-links{display:flex;align-items:center;gap:2rem;font-size:var(--step-small);color:var(--muted)}
 .nav-links a:not(.btn){transition:color .15s ease}
-.nav-links a:not(.btn):hover{color:var(--fg)}
-.btn{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem 1.05rem;border-radius:7px;font-size:.87rem;font-weight:600;text-decoration:none;border:1px solid transparent;white-space:nowrap;transition:transform .15s ease,box-shadow .15s ease,opacity .15s ease,background .15s ease}
-.btn-primary{background:var(--fg);color:var(--bg)}
-.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 24px -10px color-mix(in srgb, var(--accent) 55%, transparent)}
-.btn-ghost{border-color:var(--border);color:var(--fg)}
-.btn-ghost:hover{background:var(--surface-2);border-color:color-mix(in srgb, var(--accent) 50%, var(--border))}
+.nav-links a:not(.btn):hover{color:var(--ink)}
 
-/* hero */
-.hero{position:relative;padding-top:4.5rem;padding-bottom:4.5rem;overflow:hidden}
-.hero::before{content:"";position:absolute;inset:-30% -10% auto -10%;height:120%;z-index:0;pointer-events:none;
-  background:radial-gradient(55% 60% at 30% 0%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%),
-             radial-gradient(45% 50% at 85% 10%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 70%)}
-.hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:1.05fr 1fr;gap:3.5rem;align-items:center}
-.eyebrow{font-family:var(--mono);font-size:.76rem;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:1.1rem;display:inline-flex;align-items:center;gap:.5rem}
-.eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px 1px var(--accent)}
-.hero h1{font-size:clamp(2.1rem,3.6vw,3rem);line-height:1.07}
-.hero h1 .accent{color:var(--accent)}
-.hero p.lede{margin-top:1.2rem;color:var(--muted);font-size:1.07rem;max-width:42ch}
-.hero .ctas{display:flex;gap:.75rem;margin-top:1.9rem;flex-wrap:wrap}
-.hero .micro{margin-top:1rem;font-family:var(--mono);font-size:.78rem;color:var(--muted)}
-.hero .micro code{color:var(--fg)}
+/* ── reveal (entrance) ──────────────────────────────────────────────── */
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .6s ease,transform .6s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1!important;transform:none!important;transition:none!important}}
 
-/* terminal panel: always dark, real captured output */
-.term{position:relative;background:var(--term-bg);border:1px solid var(--term-border);border-radius:12px;overflow:hidden;
-  box-shadow:0 30px 70px -30px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.02) inset}
-.term-bar{display:flex;gap:.42rem;align-items:center;padding:.65rem .85rem;border-bottom:1px solid var(--term-border);background:color-mix(in srgb, var(--term-bg) 85%, white 3%)}
-.term-bar span{width:10px;height:10px;border-radius:50%;display:inline-block}
-.term-bar span:nth-child(1){background:#ff5f57}
-.term-bar span:nth-child(2){background:#febc2e}
-.term-bar span:nth-child(3){background:#28c840}
-.term-title{margin-left:.5rem;font-family:var(--mono);font-size:.72rem;color:var(--term-muted)}
-.term pre{margin:0;padding:1.1rem 1.2rem;font-family:var(--mono);font-size:.82rem;line-height:1.7;color:var(--term-fg);overflow-x:auto;white-space:pre}
-.term .dim{color:var(--term-muted)}
-.term .crit{color:var(--crit)} .term .high{color:var(--high)} .term .med{color:var(--med)} .term .low{color:var(--low)} .term .info{color:var(--info)}
-.term-scan::after{content:"";position:absolute;left:0;right:0;top:2.4rem;height:2px;z-index:2;
-  background:linear-gradient(90deg,transparent,var(--accent) 35%,var(--accent) 65%,transparent);
-  box-shadow:0 0 16px 2px color-mix(in srgb, var(--accent) 70%, transparent);
-  animation:scan 6s cubic-bezier(.45,0,.55,1) infinite}
-@keyframes scan{0%{top:2.4rem;opacity:0}6%{opacity:1}50%{top:calc(100% - 2px);opacity:1}58%{opacity:0}100%{top:2.4rem;opacity:0}}
-@media (prefers-reduced-motion:reduce){.term-scan::after{animation:none;display:none}}
+/* ── hero: full-bleed clip, one glass panel (explicit exception) ─────── */
+.hero{position:relative;min-height:92vh;display:flex;align-items:center;overflow:hidden}
+.hero video, .hero .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* taste-skill-ignore: flat neutral scrim over the clip, the one allowed exception */
+.hero::after{content:"";position:absolute;inset:0;background:rgba(10,9,7,.34);pointer-events:none}
+.hero-panel{position:relative;z-index:2;max-width:640px;margin:0 var(--marginR) 0 var(--margin);
+  padding:2.6rem 2.6rem 2.8rem;border-radius:18px;
+  background:rgba(20,18,14,.42);border:1px solid rgba(238,238,232,.16); /* taste-skill-ignore: glass panel kept by explicit client request */
+  backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%); /* taste-skill-ignore: glass panel kept by explicit client request */
+  color:var(--field-1-ink)}
+.hero h1{font-size:var(--step-display);color:var(--field-1-ink)}
+.hero .lede{margin-top:1.1rem;font-size:var(--step-lead);color:var(--field-1-muted);max-width:46ch;font-weight:300;line-height:1.4}
+.hero .ctas{display:flex;align-items:center;gap:1.5rem;margin-top:1.9rem;flex-wrap:wrap}
+.hero .ctas .textlink{color:var(--field-1-ink)}
+.hero-caption{position:absolute;z-index:2;right:var(--marginR);bottom:28px;margin:0;
+  font-size:var(--step-small);color:var(--field-1-muted)}
 
-section{padding-block:4rem;border-top:1px solid var(--border)}
-section.tight{padding-block:3.4rem}
-.section-head{max-width:46ch;margin-bottom:2.2rem}
-.section-head .eyebrow{margin-bottom:.7rem}
-.section-head h2{font-size:clamp(1.45rem,3vw,1.95rem)}
-.section-head p{color:var(--muted);margin-top:.65rem}
+section{padding-block:140px}
+.head{max-width:var(--col);margin-bottom:64px}
+.head h2{font-size:var(--step-head);font-weight:300}
 
-/* compare */
-.compare{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
-.compare .card{border:1px solid var(--border);border-radius:12px;padding:1.4rem 1.5rem;min-width:0;transition:transform .18s ease}
-.compare .card.them{background:var(--surface)}
-.compare .card.us{background:linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface));
-  border-color:color-mix(in srgb, var(--accent) 55%, var(--border));
-  box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent), 0 25px 60px -35px color-mix(in srgb, var(--accent) 50%, transparent)}
-.compare h3{font-size:.92rem;font-family:var(--mono);letter-spacing:-0.01em;margin-bottom:.9rem;display:flex;align-items:center;gap:.5rem;color:var(--muted)}
-.compare .us h3{color:var(--accent)}
-.compare ul{margin:0;padding-left:1.15rem;color:var(--muted);font-size:.92rem;display:flex;flex-direction:column;gap:.6rem}
-.compare .us ul{color:var(--fg)}
-.compare .us li::marker{color:var(--accent)}
+/* ── how it works: pinned fragment, changing state ─────────────────── */
+.how{display:grid;grid-template-columns:5fr 7fr;gap:3rem;align-items:start}
+.how .steps{display:flex;flex-direction:column}
+.how .step{min-height:68vh;display:flex;flex-direction:column;justify-content:center;padding-right:2rem}
+.how .step h3{font-size:var(--step-head);font-weight:300;color:var(--muted);transition:color .3s ease;max-width:20ch}
+.how .step p{margin-top:.6rem;font-size:var(--step-body);color:var(--muted);transition:color .3s ease;max-width:40ch}
+.how .step.active h3{color:var(--ink)}
+.how .step.active p{color:var(--ink)}
+.how .stage-wrap{position:sticky;top:14vh;align-self:start}
 
-/* steps */
-.steps{display:flex;flex-direction:column;gap:0}
-.step{display:grid;grid-template-columns:2.6rem 1fr;gap:1.1rem;padding-block:1.2rem;border-top:1px solid var(--border)}
-.step:first-child{border-top:none}
-.step .n{width:2.3rem;height:2.3rem;border-radius:50%;border:1px solid var(--border);background:var(--surface);
-  display:flex;align-items:center;justify-content:center;font-family:var(--mono);color:var(--accent);font-size:.82rem}
-.step h3{font-size:1.04rem;margin-bottom:.3rem}
-.step p{color:var(--muted);margin:0;font-size:.93rem;max-width:56ch}
+/* a real fragment of the CLI, not a screenshot */
+[data-ui]{background:var(--field-1);color:var(--field-1-ink);border-radius:10px;overflow:hidden;
+  font-size:var(--step-small);box-shadow:0 1px 0 rgba(255,255,255,.04) inset}
+[data-ui] .bar{display:flex;align-items:center;height:38px;padding:0 16px;color:var(--field-1-muted);
+  border-bottom:1px solid rgba(255,255,255,.08)}
+[data-ui] .body{padding:20px 22px;min-height:260px}
+[data-ui] .row{padding:.35em 0;color:var(--field-1-muted)}
+[data-ui] .row.on{color:var(--field-1-ink)}
+[data-ui] .sev{display:inline-block;width:1.4em}
+[data-ui] .sev.high{color:#d99a4e}
+[data-ui] .sev.info{color:var(--field-1-muted)}
+[data-ui] .sev.low{color:#8aa6c2}
+[data-ui] .state{display:none}
+[data-ui] .state.on{display:block}
 
-/* feature grid */
-.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.grid .cell{background:var(--surface);padding:1.5rem 1.6rem;min-width:0;transition:background .15s ease}
-.grid .cell:hover{background:var(--surface-2)}
-.grid .cell .icon{width:2rem;height:2rem;border-radius:8px;display:flex;align-items:center;justify-content:center;
-  background:var(--accent-soft);color:var(--accent);margin-bottom:.9rem}
-.grid .cell h3{font-size:.98rem;margin-bottom:.45rem}
-.grid .cell p{color:var(--muted);font-size:.88rem;margin:0}
-.chip-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.8rem}
-.chip{font-family:var(--mono);font-size:.73rem;padding:.22rem .5rem;border-radius:5px;background:var(--surface-2);color:var(--muted);border:1px solid var(--border)}
+/* ── proof: plain names in columns, real mutation kinds ─────────────── */
+.proof-cols{columns:4 180px;column-gap:40px}
+.proof-cols .kind{break-inside:avoid;margin-bottom:28px}
+.proof-cols .kind .label{font-size:var(--step-small);color:var(--muted);margin-bottom:.4rem}
+.proof-cols .kind .name{font-size:var(--step-body);line-height:1.55}
 
-/* status */
-.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
-.status-col h3{font-size:.84rem;font-family:var(--mono);letter-spacing:.04em;text-transform:uppercase;margin-bottom:1rem}
-.status-col.built h3{color:var(--accent)}
-.status-col.next h3{color:var(--muted)}
-.status-col ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:.65rem}
-.status-col li{font-size:.92rem;padding-left:1.4rem;position:relative;color:var(--fg)}
-.status-col.built li::before{content:"";position:absolute;left:0;top:.5em;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px color-mix(in srgb, var(--accent) 70%, transparent)}
-.status-col.next li{color:var(--muted)}
-.status-col.next li::before{content:"";position:absolute;left:0;top:.5em;width:7px;height:1.5px;background:var(--muted)}
+/* ── breath: second clip, one quiet line ─────────────────────────────── */
+.breath{position:relative;min-height:62vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding-block:0}
+.breath video, .breath .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.breath::after{content:"";position:absolute;inset:0;background:rgba(10,9,7,.22)}
+.breath p{position:relative;z-index:2;max-width:30ch;text-align:center;font-size:var(--step-lead);font-weight:300;
+  color:var(--field-1-ink);padding:1.1rem 1.6rem;border-radius:14px;
+  background:rgba(20,18,14,.38);border:1px solid rgba(238,238,232,.14); /* taste-skill-ignore: same deliberate glass device as the hero */
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)} /* taste-skill-ignore: same deliberate glass device as the hero */
 
-/* closing */
-.closing{position:relative;overflow:hidden}
-.closing::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(60% 70% at 50% 110%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%)}
-.closing > *{position:relative;z-index:1}
-.closing h2{font-size:clamp(1.65rem,4vw,2.3rem);max-width:22ch}
-.install{margin-top:1.6rem}
-.closing .ctas{margin-top:1.9rem;display:flex;gap:.75rem;flex-wrap:wrap}
+/* ── features: staggered fragment cells ──────────────────────────────── */
+.feat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.feat-cell{background:var(--surface);border-radius:4px;min-height:430px;display:flex;flex-direction:column;overflow:hidden}
+.feat-cell .text{padding:24px}
+.feat-cell .text h3{font-size:var(--step-body);font-weight:500;letter-spacing:-0.01em}
+.feat-cell .text p{margin-top:.6rem;font-size:var(--step-body);color:var(--muted);line-height:1.5;max-width:42ch}
+.feat-cell .frag{margin-top:auto}
+.feat-cell:nth-child(even){flex-direction:column-reverse}
+.feat-cell:nth-child(even) .frag{margin-top:0;margin-bottom:auto}
+.feat-cell [data-ui]{border-radius:0;margin:0}
+.feat-cell [data-ui] .body{min-height:150px;padding:16px 20px}
 
-footer{padding-block:2.5rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
-footer a{color:var(--muted);text-decoration:none}
-footer a:hover{color:var(--fg)}
+.severity-demo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+/* taste-skill-ignore: a plain toggle control inside a data-ui fragment, not a card ornament */
+.severity-demo button{height:30px;padding:0 12px;border-radius:3px;border:1px solid rgba(255,255,255,.18);
+  background:transparent;color:var(--field-1-muted);font-size:var(--step-small);cursor:pointer}
+.severity-demo button.active{background:var(--field-1-ink);color:var(--field-1);border-color:var(--field-1-ink)}
+.severity-demo .exit{font-variant-numeric:tabular-nums;color:var(--field-1-ink)}
+.severity-demo .exit b{color:var(--accent)}
 
-@media (max-width:860px){
-  .hero-grid{grid-template-columns:1fr;gap:2.25rem}
-}
+/* ── list: two-ended rows, built vs next ─────────────────────────────── */
+.status-cols{display:grid;grid-template-columns:1fr 1fr;gap:4rem}
+.status-cols h3{font-size:var(--step-lead);font-weight:300;margin-bottom:1.6rem}
+.status-cols ul{list-style:none;margin:0;padding:0}
+.status-cols li{display:flex;gap:14px;padding-block:9px;font-size:var(--step-body)}
+.status-cols li .dot{width:7px;height:7px;border-radius:50%;margin-top:.65em;flex-shrink:0}
+.built .dot{background:var(--accent)}
+.next .dot{background:var(--muted);opacity:.5}
+.next li{color:var(--muted)}
+
+/* ── cta: dark field, almost empty ───────────────────────────────────── */
+.cta-section{background:var(--field-1);color:var(--field-1-ink)}
+.cta-grid{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:68vh}
+.cta-copy{padding-block:10vh}
+.cta-section p{font-size:var(--step-lead);font-weight:300;max-width:34ch;color:var(--field-1-ink)}
+.cta-section .ctas{display:flex;align-items:center;gap:1.6rem;margin-top:1.6rem;flex-wrap:wrap}
+.cta-section .textlink{color:var(--field-1-muted)}
+.cta-still{position:relative;align-self:stretch;overflow:hidden}
+.cta-still img{width:100%;height:100%;object-fit:cover;filter:grayscale(.3) brightness(.78)}
+
+/* ── footer: single quiet strip ──────────────────────────────────────── */
+footer{padding-block:48px 28px}
+.foot-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;font-size:var(--step-small)}
+.foot-row .links{display:flex;gap:28px;justify-self:center}
+.foot-row .end{justify-self:end;color:var(--muted)}
+.foot-row a:hover{color:var(--accent)}
+.credit-line{margin-top:18px;font-size:var(--step-small);color:var(--muted);max-width:720px}
+.credit-line a{border-bottom:1px solid currentColor} /* taste-skill-ignore: a link underline, not a divider */
+
 @media (max-width:640px){
-  .compare{grid-template-columns:1fr}
-  .grid{grid-template-columns:1fr}
-  .status-grid{grid-template-columns:1fr}
+  .nav-row{gap:.6rem;height:auto;padding-block:14px}
   .nav-links{gap:.9rem}
-  .nav-links span.sep{display:none}
+  .nav-links a:not(.btn){display:none}
+  .btn{height:38px;padding:0 14px;font-size:13px}
+}
+@media (max-width:900px){
+  .hero{min-height:82vh}
+  .hero-panel{margin:0 var(--marginR) 0 var(--margin);padding:2rem 1.8rem 2.2rem;max-width:none}
+  .how{grid-template-columns:1fr}
+  .how .stage-wrap{position:static;margin-top:2rem}
+  .how .step{min-height:0;padding:2.4rem 0}
+  .feat-grid{grid-template-columns:1fr}
+  .feat-cell{min-height:0}
+  .status-cols{grid-template-columns:1fr;gap:2.4rem}
+  .proof-cols{columns:2 160px}
+  section{padding-block:88px}
+  .cta-grid{grid-template-columns:1fr;min-height:0}
+  .cta-copy{padding-block:10vh 4vh}
+  .cta-still{height:38vh}
+  .foot-row{grid-template-columns:1fr;text-align:left;gap:14px}
+  .foot-row .links{justify-self:start;flex-wrap:wrap}
+  .foot-row .end{justify-self:start}
 }
 </style>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
 </head>
 <body>
 
-<header class="nav">
-  <div class="wrap container-wide nav-inner">
-    <div class="wordmark">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8.2" stroke="var(--accent)" stroke-width="1.3" opacity=".45"/><circle cx="10" cy="10" r="5" stroke="var(--accent)" stroke-width="1.3" opacity=".75"/><circle cx="10" cy="10" r="1.8" fill="var(--accent)"/></svg>
-      mcp-xray
-    </div>
-    <nav class="nav-links">
+<nav class="top pad">
+  <div class="nav-row">
+    <span class="wordmark">mcp-xray</span>
+    <div class="nav-links">
       <a href="https://github.com/mbishflavien/mcp-xray#readme" target="_blank" rel="noopener">Docs</a>
-      <span class="sep">·</span>
       <a href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">GitHub</a>
-      <a class="btn btn-ghost" href="#start">Get started</a>
-    </nav>
+      <a class="btn" href="#start">Read the quickstart</a>
+    </div>
   </div>
-</header>
+</nav>
 
 <main>
 
-  <section class="hero wrap" style="border-top:none">
-    <div class="container-wide hero-grid">
-      <div>
-        <span class="eyebrow">Open source · Go · MCP security</span>
-        <h1>See through your MCP server <span class="accent">before something else does.</span></h1>
-        <p class="lede">mcp-xray connects to a Model Context Protocol server, generates adversarial inputs from each tool's own schema, and actually calls the tool with them — then scores what really happens. Its probes run sandboxed, so a malicious or compromised server can't turn a scan against the thing scanning it.</p>
-        <div class="ctas">
-          <a class="btn btn-primary" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
-          <a class="btn btn-ghost" href="#start">Read the quickstart</a>
-        </div>
-        <div class="micro">No filesystem. No network. No environment access. <code>wazero</code> + WASI, every probe run.</div>
-      </div>
-
-      <div class="term term-scan">
-        <div class="term-bar"><span></span><span></span><span></span><span class="term-title">mcp-xray -- ./example-server</span></div>
-        <pre><span class="dim">example-server 0.1.0</span>
-<span class="dim">18 finding(s):</span>
-
-<span class="info">[info]</span> delete_all_records: missing_required: skipped_unsafe
-<span class="dim">    blocked: tool name contains "delete"</span>
-<span class="low">[low]</span>  greet: sql_injection: accepted_invalid
-<span class="dim">    evidence: Hi ' OR '1'='1'; DROP TABLE users; --</span>
-<span class="high">[high]</span> process: null_byte_injection: crash
-<span class="dim">    evidence: connection closed: calling "tools/call": EOF</span></pre>
+  <section class="hero" style="padding-block:0">
+    <video autoplay muted loop playsinline preload="metadata"
+      poster="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" aria-hidden="true">
+      <source src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023.webm" type="video/webm">
+    </video>
+    <div class="hero-panel on-dark reveal">
+      <h1>One less thing to watch.</h1>
+      <p class="lede">mcp-xray calls every tool on your MCP server with the inputs that break things, sandboxed, so nothing it finds can turn around and touch your team.</p>
+      <div class="ctas">
+        <a class="btn" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
+        <a class="textlink" href="#start">Read the quickstart</a>
       </div>
     </div>
+    <p class="hero-caption">Half Dome, Yosemite, at dusk.</p>
   </section>
 
-  <section class="tight wrap">
-    <div class="container">
-      <div class="section-head">
-        <span class="eyebrow">Why it's different</span>
-        <h2>Most scanners fuzz the server. mcp-xray sandboxes itself.</h2>
-        <p>The server you're scanning might be exactly the thing you don't trust yet. A scanner that assumes otherwise is a liability.</p>
-      </div>
-      <div class="compare">
-        <div class="card them">
-          <h3>Typical MCP scanner</h3>
-          <ul>
-            <li>Generates payloads in the host process</li>
-            <li>Sends them straight to the live server</li>
-            <li>A crafted schema can hang or crash the scanner itself</li>
-            <li>No limit on how much the target can make it do</li>
-          </ul>
-        </div>
-        <div class="card us">
-          <h3>mcp-xray</h3>
-          <ul>
-            <li>Payload generation runs inside a WASI sandbox — no filesystem, network, or environment access</li>
-            <li>Every probe run has a hard timeout and a memory cap</li>
-            <li>An adversarial schema's mutation count is capped, not unbounded</li>
-            <li>Calling a destructive-looking tool needs an explicit <code>--allow-tool</code></li>
-          </ul>
-        </div>
-      </div>
+  <section class="pad">
+    <div class="head reveal">
+      <h2>How it watches, so you don't have to.</h2>
     </div>
-  </section>
-
-  <section class="tight wrap">
-    <div class="container">
-      <div class="section-head">
-        <span class="eyebrow">How it works</span>
-        <h2>Introspect, fuzz, call, score.</h2>
-      </div>
+    <div class="how">
       <div class="steps">
-        <div class="step">
-          <div class="n">01</div>
-          <div><h3>Introspect</h3><p>Connect over stdio and list every tool, resource, and prompt the server advertises.</p></div>
+        <div class="step" data-state="0">
+          <h3>It asks what's there.</h3>
+          <p>Every tool, resource and prompt the server advertises, listed before anything is touched.</p>
         </div>
-        <div class="step">
-          <div class="n">02</div>
-          <div><h3>Generate</h3><p>Build adversarial payloads from each tool's own input schema — type confusion, oversized strings, path traversal, null bytes, SQL/shell/template injection, mass assignment, missing required fields.</p></div>
+        <div class="step" data-state="1">
+          <h3>Then it tries to break it.</h3>
+          <p>Type confusion, oversized strings, null bytes, injection strings, built straight from the tool's own schema.</p>
         </div>
-        <div class="step">
-          <div class="n">03</div>
-          <div><h3>Call, for real</h3><p>Actually invoke the tool with each payload, gated by a safety policy that blocks anything that looks destructive unless you say otherwise.</p></div>
+        <div class="step" data-state="2">
+          <h3>It actually calls the tool.</h3>
+          <p>Not a simulation. The real tool, on the real server, gated so a destructive one can't run without you saying so.</p>
         </div>
-        <div class="step">
-          <div class="n">04</div>
-          <div><h3>Classify &amp; score</h3><p>A healthy rejection, a silently accepted invalid input, an internal error, a hang, or a crash — each becomes a severity-scored finding with evidence.</p></div>
-        </div>
-        <div class="step">
-          <div class="n">05</div>
-          <div><h3>Report</h3><p>Text for a human, JSON for a pipeline, or SARIF for GitHub code scanning — with <code>--fail-on</code> to gate CI on severity.</p></div>
+        <div class="step" data-state="3">
+          <h3>It writes down what happened.</h3>
+          <p>A clean rejection, a silent crash, a hang. Each one scored, with the evidence attached.</p>
         </div>
       </div>
-    </div>
-  </section>
-
-  <section class="tight wrap">
-    <div class="container">
-      <div class="section-head">
-        <span class="eyebrow">Proof, not a promise</span>
-        <h2>The safety gate, caught in the act of working.</h2>
-        <p>A tool named <code>delete_all_records</code> — every one of its eight mutation attempts blocked before a real call was ever made.</p>
-      </div>
-      <div class="term">
-        <div class="term-bar"><span></span><span></span><span></span><span class="term-title">mcp-xray --allow-tool delete_all_records -- ./example-server</span></div>
-        <pre><span class="dim"># without --allow-tool: 8/8 blocked, 0 real calls made</span>
-<span class="info">[info]</span> delete_all_records: sql_injection: skipped_unsafe
-<span class="info">[info]</span> delete_all_records: mass_assignment: skipped_unsafe
-<span class="dim">    ... 6 more, all skipped_unsafe</span>
-
-<span class="dim"># with --allow-tool delete_all_records: the gate lifts, real calls happen</span>
-<span class="low">[low]</span>  delete_all_records: sql_injection: accepted_invalid
-<span class="low">[low]</span>  delete_all_records: mass_assignment: accepted_invalid</pre>
-      </div>
-    </div>
-  </section>
-
-  <section class="tight wrap">
-    <div class="container">
-      <div class="section-head">
-        <span class="eyebrow">What's inside</span>
-        <h2>Built like something meant to run against things you don't trust.</h2>
-      </div>
-      <div class="grid">
-        <div class="cell">
-          <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2"/><line x1="12" y1="1.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22.5"/></svg></div>
-          <h3>Schema-aware fuzzing</h3>
-          <p>Mutations are derived from each tool's declared schema, not guessed blind.</p>
-          <div class="chip-row">
-            <span class="chip">type_confusion</span><span class="chip">oversized_string</span><span class="chip">path_traversal</span><span class="chip">null_byte</span><span class="chip">sql/shell/template</span>
+      <div class="stage-wrap">
+        <div data-ui id="how-stage">
+          <div class="bar">mcp-xray -- ./your-server</div>
+          <div class="body">
+            <div class="state on" data-s="0">
+              <div class="row on">greet</div>
+              <div class="row">process</div>
+              <div class="row">slow_echo</div>
+              <div class="row">delete_all_records</div>
+              <div class="row" style="margin-top:1em">4 tools, 0 resources, 1 prompt</div>
+            </div>
+            <div class="state" data-s="1">
+              <div class="row on">process/null-byte-injection/data</div>
+              <div class="row on">process/sql-injection/data</div>
+              <div class="row on">process/path-traversal/data</div>
+              <div class="row">… 6 more mutations generated</div>
+            </div>
+            <div class="state" data-s="2">
+              <div class="row on">mcp-xray → process({ data: "mcp-xray-probe\u0000" })</div>
+              <div class="row">waiting …</div>
+            </div>
+            <div class="state" data-s="3">
+              <div class="row"><span class="sev high">high</span> process: null_byte_injection: crash</div>
+              <div class="row">evidence: connection closed: EOF</div>
+            </div>
           </div>
         </div>
-        <div class="cell">
-          <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2.5l8 3.3v5.3c0 5-3.4 8.4-8 10.4-4.6-2-8-5.4-8-10.4V5.8z"/></svg></div>
-          <h3>Destructive-tool gate</h3>
-          <p>A keyword policy blocks calling anything named like delete, drop, destroy, purge, or wipe — unless explicitly allowed.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="pad">
+    <div class="head reveal">
+      <h2>What it actually tries.</h2>
+    </div>
+    <div class="proof-cols reveal">
+      <div class="kind"><div class="label">shape</div><div class="name">missing required field</div><div class="name">mass assignment</div></div>
+      <div class="kind"><div class="label">size</div><div class="name">oversized string</div></div>
+      <div class="kind"><div class="label">path</div><div class="name">path traversal</div></div>
+      <div class="kind"><div class="label">encoding</div><div class="name">embedded null byte</div></div>
+      <div class="kind"><div class="label">injection</div><div class="name">SQL injection</div><div class="name">shell injection</div><div class="name">template injection</div></div>
+      <div class="kind"><div class="label">type</div><div class="name">type confusion</div></div>
+    </div>
+  </section>
+
+  <section class="breath">
+    <video autoplay muted loop playsinline preload="metadata"
+      poster="assets/mountain-moment-berkeley-park-flowers-poster.jpg" aria-hidden="true">
+      <source src="assets/mountain-moment-berkeley-park-flowers.webm" type="video/webm">
+    </video>
+    <p class="reveal">This is what a quiet afternoon looks like when nothing's on fire.</p>
+  </section>
+
+  <section class="pad">
+    <div class="head reveal">
+      <h2>Built for servers you don't trust yet.</h2>
+    </div>
+    <div class="feat-grid">
+      <div class="feat-cell reveal">
+        <div class="text"><h3>Schema-aware fuzzing</h3><p>Mutations come from each tool's own declared schema, not a guess: type confusion, oversized strings, path traversal, null bytes, SQL, shell and template injection, mass assignment, missing required fields.</p></div>
+      </div>
+      <div class="feat-cell reveal">
+        <div class="text"><h3>Destructive-tool gate</h3><p>A keyword policy blocks calling anything named like delete, drop, destroy, purge or wipe, unless you explicitly allow it.</p></div>
+        <div class="frag">
+          <div data-ui><div class="bar">delete_all_records</div><div class="body" style="min-height:0;padding:16px 20px">
+            <div class="row on">skipped_unsafe: blocked by default</div>
+          </div></div>
         </div>
-        <div class="cell">
-          <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10.5" width="16" height="10" rx="1.6"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></div>
-          <h3>Bounded by design</h3>
-          <p>Sandboxed probes, a 16MiB memory cap, a hard execution deadline, capped mutation counts, capped evidence length, capped pagination.</p>
+      </div>
+      <div class="feat-cell reveal">
+        <div class="text"><h3>Sandboxed execution</h3><p>Every probe runs inside a WASI sandbox with no filesystem, network or environment access, and a hard limit on both time and memory.</p></div>
+        <div class="frag">
+          <div data-ui><div class="bar">sandbox limits</div><div class="body" style="min-height:0;padding:16px 20px">
+            <div class="row on">timeout 30s · memory 16MiB</div>
+          </div></div>
         </div>
-        <div class="cell">
-          <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M8 9h8M8 13h8M8 17h4"/></svg></div>
-          <h3>CI-ready reports</h3>
-          <p>Text, JSON, or SARIF for GitHub code scanning, with <code>--fail-on &lt;severity&gt;</code> to gate a pipeline on what's found.</p>
+      </div>
+      <div class="feat-cell reveal">
+        <div class="text"><h3>Bounded by design</h3><p>A hostile schema can't make the scan grow without end: mutation counts, evidence length and listed tools are all capped.</p></div>
+        <div class="frag">
+          <div data-ui><div class="bar">caps</div><div class="body" style="min-height:0;padding:16px 20px">
+            <div class="row on">fields ≤ 200 · evidence ≤ 2000B · tools ≤ 10,000</div>
+          </div></div>
+        </div>
+      </div>
+      <div class="feat-cell reveal">
+        <div class="text"><h3>CI-ready reports</h3><p>Text for a person, JSON for a pipeline, SARIF for GitHub code scanning. Pick the severity that fails your build:</p></div>
+        <div class="frag">
+          <div data-ui><div class="bar">--fail-on</div><div class="body" style="min-height:0;padding:16px 20px">
+            <div class="severity-demo" id="fail-on-demo">
+              <button data-sev="2" type="button">medium</button>
+              <button data-sev="3" class="active" type="button">high</button>
+              <button data-sev="4" type="button">critical</button>
+              <span class="exit">exit code: <b id="exit-code">1</b></span>
+            </div>
+          </div></div>
+        </div>
+      </div>
+      <div class="feat-cell reveal">
+        <div class="text"><h3>Honest by default</h3><p>A healthy rejection is not a finding. No padded severity, no inflated counts. Just what actually happened.</p></div>
+        <div class="frag">
+          <div data-ui><div class="bar">greet</div><div class="body" style="min-height:0;padding:16px 20px">
+            <div class="row"><span class="sev info">info</span> sql_injection: rejected, not reported</div>
+          </div></div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="tight wrap">
-    <div class="container">
-      <div class="section-head">
-        <span class="eyebrow">Honestly</span>
-        <h2>What's built, and what isn't yet.</h2>
-        <p>No inflated status. This is what actually runs today.</p>
+  <section class="pad">
+    <div class="head reveal">
+      <h2>What's true today.</h2>
+    </div>
+    <div class="status-cols reveal">
+      <div class="built">
+        <h3>Built &amp; verified</h3>
+        <ul>
+          <li><span class="dot"></span>Full schema-fuzz loop, start to scored finding</li>
+          <li><span class="dot"></span>Sandboxed, timeout- and memory-bounded probes</li>
+          <li><span class="dot"></span>Destructive-tool gate with an allow-list override</li>
+          <li><span class="dot"></span>Text, JSON and SARIF reports</li>
+          <li><span class="dot"></span>Hardened against a hostile target, not just a buggy one</li>
+        </ul>
       </div>
-      <div class="status-grid">
-        <div class="status-col built">
-          <h3>Built &amp; verified</h3>
-          <ul>
-            <li>Full schema-fuzz loop: generate, call, classify, score</li>
-            <li>Sandboxed, timeout- and memory-bounded probes</li>
-            <li>Destructive-tool safety gate with allowlist override</li>
-            <li>Text / JSON / SARIF reports, <code>--fail-on</code> CI gating</li>
-            <li>Hardened against a malicious target (bounded pagination, evidence, output)</li>
-          </ul>
-        </div>
-        <div class="status-col next">
-          <h3>Next</h3>
-          <ul>
-            <li>Auth-bypass probing</li>
-            <li>Rate-limit probing</li>
-            <li>Prompt-injection-in-output detection</li>
-            <li>HTTP / Streamable transport (stdio only today)</li>
-            <li>Live terminal dashboard</li>
-          </ul>
-        </div>
+      <div class="next">
+        <h3 style="color:var(--muted)">Next</h3>
+        <ul>
+          <li><span class="dot"></span>Auth-bypass probing</li>
+          <li><span class="dot"></span>Rate-limit probing</li>
+          <li><span class="dot"></span>Prompt-injection-in-output detection</li>
+          <li><span class="dot"></span>A transport beyond stdio</li>
+          <li><span class="dot"></span>A live dashboard</li>
+        </ul>
       </div>
     </div>
   </section>
 
-  <section class="closing wrap" id="start">
-    <div class="container">
-      <div class="section-head" style="margin-bottom:0">
-        <span class="eyebrow">Get started</span>
-        <h2>Point it at a server. See what it finds.</h2>
+  <section class="cta-section" id="start">
+    <div class="cta-grid">
+      <div class="cta-copy pad">
+        <p class="reveal">Point it at a server you run. See what it actually does.</p>
+        <div class="ctas reveal">
+          <a class="btn" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
+          <a class="textlink" href="https://github.com/mbishflavien/mcp-xray#getting-started" target="_blank" rel="noopener">Read the quickstart</a>
+        </div>
       </div>
-      <div class="term install">
-        <div class="term-bar"><span></span><span></span><span></span><span class="term-title">quickstart</span></div>
-        <pre><span class="dim">$</span> ./scripts/build-probes.sh
-<span class="dim">$</span> go build -o bin/mcp-xray ./cmd/mcp-xray
-<span class="dim">$</span> ./bin/mcp-xray -- &lt;command to start your MCP server&gt;</pre>
-      </div>
-      <div class="ctas">
-        <a class="btn btn-primary" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
-        <a class="btn btn-ghost" href="https://github.com/mbishflavien/mcp-xray#readme" target="_blank" rel="noopener">Full README</a>
+      <div class="cta-still reveal">
+        <img src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" width="854" height="480" alt="Dusk settling over Half Dome, Yosemite" loading="lazy">
       </div>
     </div>
   </section>
-
-  <footer class="wrap container-wide">
-    <span>MIT licensed · written in Go on the official MCP go-sdk and wazero</span>
-    <a href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">github.com/mbishflavien/mcp-xray</a>
-  </footer>
 
 </main>
+
+<footer class="pad">
+  <div class="foot-row">
+    <span>mcp-xray, a security scanner for MCP servers</span>
+    <span class="links">
+      <a href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/mbishflavien/mcp-xray#readme" target="_blank" rel="noopener">Docs</a>
+      <a href="https://github.com/mbishflavien/mcp-xray/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </span>
+    <span class="end">2026</span>
+  </div>
+  <p class="credit-line">Footage: <a href="https://commons.wikimedia.org/wiki/File:Sunset_on_Halfdome_timelapse_Yosemite_CA_2023-07-15_20-11-06_1.webm" target="_blank" rel="noopener">“Sunset on Halfdome,” Yosemite</a>, by G. Edward Johnson, CC BY 4.0. <a href="https://commons.wikimedia.org/wiki/File:Mountain_Moment-_Berkeley_Park_Flowers.webm" target="_blank" rel="noopener">“Berkeley Park Flowers,”</a> Mount Rainier National Park, CC BY 3.0. Both via Wikimedia Commons.</p>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // pause decorative video under reduced motion
+  if (reduceMotion) {
+    document.querySelectorAll('video[autoplay]').forEach(function(v){ v.removeAttribute('autoplay'); v.pause(); });
+  }
+
+  // entrance reveal
+  var revealEls = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, {threshold: .15});
+    revealEls.forEach(function(el, i){ el.style.transitionDelay = (i % 6) * 70 + 'ms'; io.observe(el); });
+  } else {
+    revealEls.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  // how-it-works: active step + fragment state
+  var steps = Array.prototype.slice.call(document.querySelectorAll('.how .step'));
+  var states = Array.prototype.slice.call(document.querySelectorAll('#how-stage .state'));
+  function setActive(i){
+    steps.forEach(function(s, idx){ s.classList.toggle('active', idx === i); });
+    states.forEach(function(s){ s.classList.toggle('on', s.getAttribute('data-s') === String(i)); });
+  }
+  if (steps.length) {
+    setActive(0);
+    if ('IntersectionObserver' in window) {
+      var stepIo = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if (e.isIntersecting) setActive(steps.indexOf(e.target));
+        });
+      }, {threshold: .6});
+      steps.forEach(function(s){ stepIo.observe(s); });
+    }
+  }
+
+  // live thing: --fail-on severity -> exit code
+  var demo = document.getElementById('fail-on-demo');
+  if (demo) {
+    var SAMPLE_SEVERITY = 3; // the sample finding is "high"
+    var buttons = demo.querySelectorAll('button');
+    var exitEl = document.getElementById('exit-code');
+    buttons.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        buttons.forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        var threshold = parseInt(btn.getAttribute('data-sev'), 10);
+        exitEl.textContent = SAMPLE_SEVERITY >= threshold ? '1' : '0';
+      });
+    });
+  }
+})();
+</script>
 </body>
 </html>
