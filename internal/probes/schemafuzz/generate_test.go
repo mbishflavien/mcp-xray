@@ -40,6 +40,13 @@ func TestGenerateStringMutations(t *testing.T) {
 	if counts["path_traversal"] != 1 {
 		t.Errorf("path_traversal count = %d, want 1", counts["path_traversal"])
 	}
+	for _, kind := range []string{
+		"null_byte_injection", "sql_injection", "shell_injection", "template_injection",
+	} {
+		if counts[kind] != 1 {
+			t.Errorf("%s count = %d, want 1", kind, counts[kind])
+		}
+	}
 }
 
 func TestGenerateNumberMutation(t *testing.T) {

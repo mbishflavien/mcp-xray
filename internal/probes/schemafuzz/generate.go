@@ -6,6 +6,7 @@ package schemafuzz
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/mbishflavien/mcp-xray/internal/probeproto"
@@ -53,23 +54,7 @@ func Generate(toolName string, schema json.RawMessage) ([]probeproto.Mutation, s
 	for name, prop := range s.Properties {
 		switch prop.Type {
 		case "string":
-			args := cloneArgs(base)
-			args[name] = strings.Repeat("A", oversizedStringLen)
-			mutations = append(mutations, probeproto.Mutation{
-				ID:          fmt.Sprintf("%s/oversized-string/%s", toolName, name),
-				Kind:        "oversized_string",
-				Description: fmt.Sprintf("send a %d-character string for %q", oversizedStringLen, name),
-				Args:        args,
-			})
-
-			args = cloneArgs(base)
-			args[name] = "../../../../../../etc/passwd"
-			mutations = append(mutations, probeproto.Mutation{
-				ID:          fmt.Sprintf("%s/path-traversal/%s", toolName, name),
-				Kind:        "path_traversal",
-				Description: fmt.Sprintf("send a path-traversal string for %q", name),
-				Args:        args,
-			})
+			mutations = append(mutations, stringMutations(toolName, name, base)...)
 		case "number", "integer":
 			args := cloneArgs(base)
 			args[name] = "not-a-number"
@@ -96,6 +81,38 @@ func Generate(toolName string, schema json.RawMessage) ([]probeproto.Mutation, s
 	return mutations, ""
 }
 
+// stringMutation is one (kind, value, description) triple to try for a
+// string-typed property.
+type stringMutation struct {
+	kind, value, description string
+}
+
+var stringMutationTable = []stringMutation{
+	{"oversized_string", strings.Repeat("A", oversizedStringLen), fmt.Sprintf("send a %d-character string", oversizedStringLen)},
+	{"path_traversal", "../../../../../../etc/passwd", "send a path-traversal string"},
+	{"null_byte_injection", "mcp-xray-probe\x00", "send a string with an embedded null byte"},
+	{"sql_injection", "' OR '1'='1'; DROP TABLE users; --", "send a SQL-injection string"},
+	{"shell_injection", "; rm -rf / #", "send a shell-injection string"},
+	{"template_injection", "{{7*7}}${7*7}<%= 7*7 %>", "send a template-injection string"},
+}
+
+// stringMutations returns one mutation per entry in stringMutationTable for
+// the given property, each varying only that property.
+func stringMutations(toolName, name string, base map[string]any) []probeproto.Mutation {
+	out := make([]probeproto.Mutation, 0, len(stringMutationTable))
+	for _, sm := range stringMutationTable {
+		args := cloneArgs(base)
+		args[name] = sm.value
+		out = append(out, probeproto.Mutation{
+			ID:          fmt.Sprintf("%s/%s/%s", toolName, strings.ReplaceAll(sm.kind, "_", "-"), name),
+			Kind:        sm.kind,
+			Description: fmt.Sprintf("%s for %q", sm.description, name),
+			Args:        args,
+		})
+	}
+	return out
+}
+
 // baseArgs builds a minimal valid-looking argument set so each mutation only
 // varies the one field it's testing.
 func baseArgs(s objectSchema) map[string]any {
@@ -115,8 +132,6 @@ func baseArgs(s objectSchema) map[string]any {
 
 func cloneArgs(src map[string]any) map[string]any {
 	dst := make(map[string]any, len(src))
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 	return dst
 }

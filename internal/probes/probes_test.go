@@ -26,7 +26,10 @@ func TestSchemaFuzzMutationsEndToEnd(t *testing.T) {
 	for _, m := range mutations {
 		kinds[m.Kind] = true
 	}
-	for _, want := range []string{"missing_required", "oversized_string", "path_traversal", "mass_assignment"} {
+	for _, want := range []string{
+		"missing_required", "oversized_string", "path_traversal", "mass_assignment",
+		"null_byte_injection", "sql_injection", "shell_injection", "template_injection",
+	} {
 		if !kinds[want] {
 			t.Errorf("mutations missing kind %q; got %v", want, mutations)
 		}
