@@ -24,7 +24,7 @@ func SchemaFuzzMutations(ctx context.Context, toolName string, schema json.RawMe
 		return nil, fmt.Errorf("marshal probe input: %w", err)
 	}
 
-	out, err := sandbox.Run(ctx, schemaFuzzWasm, input)
+	out, err := sandbox.Run(ctx, schemaFuzzWasm, input, sandbox.DefaultTimeout)
 	if err != nil {
 		return nil, err
 	}
