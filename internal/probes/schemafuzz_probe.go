@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mbishflavien/mcp-xray/findings"
 	"github.com/mbishflavien/mcp-xray/probe"
@@ -12,6 +13,14 @@ import (
 )
 
 const defaultCallTimeout = 5 * time.Second
+
+// maxEvidenceLen caps how much of a tool's own response (or error text)
+// gets copied into a Finding's Evidence. A malicious or buggy MCP server
+// can return an arbitrarily large response - we've seen this ourselves
+// with the oversized-string mutation, which asks for exactly that - and
+// without a cap, a single Finding (and the report containing it) could
+// grow to the size of whatever the server chose to send back.
+const maxEvidenceLen = 2000
 
 // SchemaFuzz is a probe.ToolProbe: for each tool it generates adversarial
 // mutations from the tool's input schema (via the sandboxed schema-fuzz
@@ -81,18 +90,33 @@ func (p *SchemaFuzz) RunTool(ctx context.Context, tc probe.ToolContext) ([]findi
 
 // evidenceFor extracts the most useful single piece of evidence for a
 // Finding: the call error if there was one, otherwise the first text
-// content in the result, otherwise nothing.
+// content in the result, otherwise nothing. The result is capped at
+// maxEvidenceLen.
 func evidenceFor(result *mcp.CallToolResult, err error) string {
 	if err != nil {
-		return err.Error()
+		return truncate(err.Error(), maxEvidenceLen)
 	}
 	if result == nil {
 		return ""
 	}
 	for _, c := range result.Content {
 		if text, ok := c.(*mcp.TextContent); ok {
-			return text.Text
+			return truncate(text.Text, maxEvidenceLen)
 		}
 	}
 	return ""
+}
+
+// truncate shortens s to at most maxLen bytes, cutting on a UTF-8 rune
+// boundary so the result is never invalid UTF-8, and notes how much was
+// cut.
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	cut := s[:maxLen]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	return fmt.Sprintf("%s ... (truncated, %d bytes total)", cut, len(s))
 }
