@@ -29,11 +29,27 @@
   --margin: max(20px, env(safe-area-inset-left,0px));
   --marginR: max(20px, env(safe-area-inset-right,0px));
   --col: 620px;
+
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 *{box-sizing:border-box}
-html,body{margin:0}
+html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--face);font-weight:400;
   line-height:1.55;-webkit-font-smoothing:antialiased;font-size:var(--step-body)}
+
+/* ── persistent background: one clip, fixed, never changes with scroll ─ */
+.bg-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2}
+.bg-scrim{position:fixed;inset:0;z-index:-1;background:rgba(6,5,4,.42);pointer-events:none}
+.bg-caption{position:fixed;z-index:4;right:var(--marginR);bottom:18px;margin:0;
+  font-size:var(--step-small);color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.bg-video{display:none}
+  body{background:#141008 var(--grain);background-size:140px}
+}
+
+/* ── glass: the shared content surface over the fixed video ──────────── */
+.glass{background:var(--glass);border:1px solid var(--glass-border); /* taste-skill-ignore: glass is the explicit, page-wide client brief, not ornament */
+  backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%); /* taste-skill-ignore: glass is the explicit, page-wide client brief, not ornament */
+  border-radius:16px}
 h1,h2,h3{font-family:var(--face);font-weight:300;letter-spacing:-0.02em;line-height:1.02;margin:0}
 p{margin:0}
 a{color:inherit;text-decoration:none}
@@ -50,9 +66,11 @@ button{font-family:inherit}
 .textlink{font-size:var(--step-small);font-weight:500;border-bottom:1px solid currentColor;padding-bottom:2px} /* taste-skill-ignore: a link underline, not a divider */
 .textlink:hover{color:var(--accent)}
 
-/* ── nav: plain bar ─────────────────────────────────────────────────── */
-nav.top{position:relative;z-index:5;background:var(--bg)}
-.nav-row{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;height:76px}
+/* ── nav: darker than the page, with a grain texture ──────────────────── */
+nav.top{position:sticky;top:0;z-index:5;background:#050403;overflow:hidden}
+nav.top::before{content:"";position:absolute;inset:0;background-image:var(--grain);background-size:140px;
+  opacity:.5;mix-blend-mode:overlay;pointer-events:none}
+.nav-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:1.5rem;height:76px}
 .wordmark{font-size:var(--step-body);font-weight:500;letter-spacing:-0.01em;white-space:nowrap}
 .nav-links{display:flex;align-items:center;gap:2rem;font-size:var(--step-small);color:var(--muted)}
 .nav-links a:not(.btn){transition:color .15s ease}
@@ -63,24 +81,17 @@ nav.top{position:relative;z-index:5;background:var(--bg)}
 .reveal.in{opacity:1;transform:none}
 @media (prefers-reduced-motion:reduce){.reveal{opacity:1!important;transform:none!important;transition:none!important}}
 
-/* ── hero: full-bleed clip, one glass panel (explicit exception) ─────── */
-.hero{position:relative;min-height:92vh;display:flex;align-items:center;overflow:hidden}
-.hero video, .hero .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-/* taste-skill-ignore: flat neutral scrim over the clip, the one allowed exception */
-.hero::after{content:"";position:absolute;inset:0;background:rgba(10,9,7,.34);pointer-events:none}
-.hero-panel{position:relative;z-index:2;max-width:640px;margin:0 var(--marginR) 0 var(--margin);
-  padding:2.6rem 2.6rem 2.8rem;border-radius:18px;
-  background:var(--glass);border:1px solid var(--glass-border); /* taste-skill-ignore: glass panel kept by explicit client request */
-  backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%); /* taste-skill-ignore: glass panel kept by explicit client request */
-  color:var(--ink)}
+/* ── hero: the shared background shows through here first ────────────── */
+.hero{position:relative;min-height:88vh;display:flex;align-items:center}
+.hero-panel{max-width:640px;margin:0 var(--marginR) 0 var(--margin);
+  padding:2.6rem 2.6rem 2.8rem;color:var(--ink)}
 .hero h1{font-size:var(--step-display);color:var(--ink)}
 .hero .lede{margin-top:1.1rem;font-size:var(--step-lead);color:var(--muted);max-width:46ch;font-weight:300;line-height:1.4}
 .hero .ctas{display:flex;align-items:center;gap:1.5rem;margin-top:1.9rem;flex-wrap:wrap}
 .hero .ctas .textlink{color:var(--ink)}
-.hero-caption{position:absolute;z-index:2;right:var(--marginR);bottom:28px;margin:0;
-  font-size:var(--step-small);color:var(--muted)}
 
-section{padding-block:108px}
+section{padding-block:54px}
+.panel{padding:56px}
 .head{max-width:var(--col);margin-bottom:64px}
 .head h2{font-size:var(--step-head);font-weight:300}
 
@@ -110,26 +121,19 @@ section{padding-block:108px}
 [data-ui] .state.on{display:block}
 
 /* ── proof: plain names in columns, real mutation kinds ─────────────── */
-.proof-layout{display:grid;grid-template-columns:1.6fr 1fr;gap:3rem;align-items:center}
-.proof-cols{columns:2 170px;column-gap:40px}
+.proof-cols{columns:4 150px;column-gap:40px}
 .proof-cols .kind{break-inside:avoid;margin-bottom:28px}
 .proof-cols .kind .label{font-size:var(--step-small);color:var(--muted);margin-bottom:.4rem}
 .proof-cols .kind .name{font-size:var(--step-body);line-height:1.55}
-.proof-still{border-radius:10px;overflow:hidden;align-self:stretch}
-.proof-still img{width:100%;height:100%;object-fit:cover;min-height:360px}
 
-/* ── breath: second clip, one quiet line ─────────────────────────────── */
-.breath{position:relative;min-height:62vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding-block:0}
-.breath video, .breath .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.breath::after{content:"";position:absolute;inset:0;background:rgba(10,9,7,.22)}
-.breath p{position:relative;z-index:2;max-width:30ch;text-align:center;font-size:var(--step-lead);font-weight:300;
-  color:var(--ink);padding:1.1rem 1.6rem;border-radius:14px;
-  background:var(--glass);border:1px solid var(--glass-border); /* taste-skill-ignore: same deliberate glass device as the hero */
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)} /* taste-skill-ignore: same deliberate glass device as the hero */
+/* ── breath: one quiet line, a rest between denser sections ──────────── */
+.breath{min-height:40vh;display:flex;align-items:center;justify-content:center}
+.breath p{max-width:30ch;text-align:center;font-size:var(--step-lead);font-weight:300;
+  color:var(--ink);padding:1.1rem 1.6rem}
 
 /* ── features: staggered fragment cells ──────────────────────────────── */
 .feat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.feat-cell{background:var(--surface);border-radius:4px;min-height:430px;display:flex;flex-direction:column;overflow:hidden}
+.feat-cell{background:rgba(255,255,255,.045);border-radius:4px;min-height:400px;display:flex;flex-direction:column;overflow:hidden}
 .feat-cell .text{padding:24px}
 .feat-cell .text h3{font-size:var(--step-body);font-weight:500;letter-spacing:-0.01em}
 .feat-cell .text p{margin-top:.6rem;font-size:var(--step-body);color:var(--muted);line-height:1.5;max-width:42ch}
@@ -157,17 +161,17 @@ section{padding-block:108px}
 .next .dot{background:var(--muted);opacity:.5}
 .next li{color:var(--muted)}
 
-/* ── cta: almost empty, closed on the right by a picture ─────────────── */
-.cta-grid{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:68vh}
-.cta-copy{padding-block:10vh}
+/* ── cta: one quiet panel, almost empty around it ─────────────────────── */
+.cta-section{min-height:50vh;display:flex;align-items:center}
+.cta-copy{max-width:560px;margin-inline:auto;text-align:center}
+.cta-section .ctas{justify-content:center}
 .cta-section p{font-size:var(--step-lead);font-weight:300;max-width:34ch;color:var(--ink)}
 .cta-section .ctas{display:flex;align-items:center;gap:1.6rem;margin-top:1.6rem;flex-wrap:wrap}
 .cta-section .textlink{color:var(--muted)}
-.cta-still{position:relative;align-self:stretch;overflow:hidden}
-.cta-still img{width:100%;height:100%;object-fit:cover;filter:grayscale(.3) brightness(.78)}
 
 /* ── footer: single quiet strip ──────────────────────────────────────── */
-footer{padding-block:48px 28px}
+footer{padding-block:40px}
+footer .panel{padding:28px 32px}
 .foot-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1rem;font-size:var(--step-small)}
 .foot-row .links{display:flex;gap:28px;justify-self:center}
 .foot-row .end{justify-self:end;color:var(--muted)}
@@ -190,13 +194,9 @@ footer{padding-block:48px 28px}
   .feat-grid{grid-template-columns:1fr}
   .feat-cell{min-height:0}
   .status-cols{grid-template-columns:1fr;gap:2.4rem}
-  .proof-layout{grid-template-columns:1fr}
-  .proof-still{margin-top:2rem;height:34vh}
-  .proof-cols{columns:2 160px}
-  section{padding-block:88px}
-  .cta-grid{grid-template-columns:1fr;min-height:0}
-  .cta-copy{padding-block:10vh 4vh}
-  .cta-still{height:38vh}
+  .proof-cols{columns:2 150px}
+  .panel{padding:32px}
+  .cta-section{min-height:0}
   .foot-row{grid-template-columns:1fr;text-align:left;gap:14px}
   .foot-row .links{justify-self:start;flex-wrap:wrap}
   .foot-row .end{justify-self:start}
@@ -204,6 +204,13 @@ footer{padding-block:48px 28px}
 </style>
 </head>
 <body>
+
+<video class="bg-video" autoplay muted loop playsinline preload="auto"
+  poster="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" aria-hidden="true">
+  <source src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023.webm" type="video/webm">
+</video>
+<div class="bg-scrim"></div>
+<p class="bg-caption">Half Dome, Yosemite, at dusk.</p>
 
 <nav class="top pad">
   <div class="nav-row">
@@ -219,11 +226,7 @@ footer{padding-block:48px 28px}
 <main>
 
   <section class="hero" style="padding-block:0">
-    <video autoplay muted loop playsinline preload="metadata"
-      poster="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" aria-hidden="true">
-      <source src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023.webm" type="video/webm">
-    </video>
-    <div class="hero-panel reveal">
+    <div class="hero-panel glass reveal">
       <h1>One less thing to watch.</h1>
       <p class="lede">mcp-xray calls every tool on your MCP server with the inputs that break things, sandboxed, so nothing it finds can turn around and touch your team.</p>
       <div class="ctas">
@@ -231,11 +234,11 @@ footer{padding-block:48px 28px}
         <a class="textlink" href="#start">Read the quickstart</a>
       </div>
     </div>
-    <p class="hero-caption">Half Dome, Yosemite, at dusk.</p>
   </section>
 
   <section class="pad">
-    <div class="head reveal">
+   <div class="glass panel reveal">
+    <div class="head">
       <h2>How it watches, so you don't have to.</h2>
     </div>
     <div class="how">
@@ -286,39 +289,32 @@ footer{padding-block:48px 28px}
         </div>
       </div>
     </div>
-  </section>
-
-  <section class="pad proof-section">
-    <div class="proof-layout">
-      <div>
-        <div class="head reveal" style="margin-bottom:40px">
-          <h2>What it actually tries.</h2>
-        </div>
-        <div class="proof-cols reveal">
-          <div class="kind"><div class="label">shape</div><div class="name">missing required field</div><div class="name">mass assignment</div></div>
-          <div class="kind"><div class="label">size</div><div class="name">oversized string</div></div>
-          <div class="kind"><div class="label">path</div><div class="name">path traversal</div></div>
-          <div class="kind"><div class="label">encoding</div><div class="name">embedded null byte</div></div>
-          <div class="kind"><div class="label">injection</div><div class="name">SQL injection</div><div class="name">shell injection</div><div class="name">template injection</div></div>
-          <div class="kind"><div class="label">type</div><div class="name">type confusion</div></div>
-        </div>
-      </div>
-      <div class="proof-still reveal">
-        <img src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" width="854" height="480" alt="Dusk settling over Half Dome, Yosemite" loading="lazy">
-      </div>
-    </div>
-  </section>
-
-  <section class="breath">
-    <video autoplay muted loop playsinline preload="metadata"
-      poster="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" aria-hidden="true">
-      <source src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023.webm" type="video/webm">
-    </video>
-    <p class="reveal">This is what a quiet evening looks like when nothing's on fire.</p>
+   </div>
   </section>
 
   <section class="pad">
-    <div class="head reveal">
+   <div class="glass panel reveal">
+    <div class="head" style="margin-bottom:40px">
+      <h2>What it actually tries.</h2>
+    </div>
+    <div class="proof-cols">
+      <div class="kind"><div class="label">shape</div><div class="name">missing required field</div><div class="name">mass assignment</div></div>
+      <div class="kind"><div class="label">size</div><div class="name">oversized string</div></div>
+      <div class="kind"><div class="label">path</div><div class="name">path traversal</div></div>
+      <div class="kind"><div class="label">encoding</div><div class="name">embedded null byte</div></div>
+      <div class="kind"><div class="label">injection</div><div class="name">SQL injection</div><div class="name">shell injection</div><div class="name">template injection</div></div>
+      <div class="kind"><div class="label">type</div><div class="name">type confusion</div></div>
+    </div>
+   </div>
+  </section>
+
+  <section class="breath">
+    <p class="glass reveal">This is what a quiet evening looks like when nothing's on fire.</p>
+  </section>
+
+  <section class="pad">
+   <div class="glass panel reveal">
+    <div class="head">
       <h2>Built for servers you don't trust yet.</h2>
     </div>
     <div class="feat-grid">
@@ -371,13 +367,15 @@ footer{padding-block:48px 28px}
         </div>
       </div>
     </div>
+   </div>
   </section>
 
   <section class="pad">
-    <div class="head reveal">
+   <div class="glass panel reveal">
+    <div class="head">
       <h2>What's true today.</h2>
     </div>
-    <div class="status-cols reveal">
+    <div class="status-cols">
       <div class="built">
         <h3>Built &amp; verified</h3>
         <ul>
@@ -399,19 +397,15 @@ footer{padding-block:48px 28px}
         </ul>
       </div>
     </div>
+   </div>
   </section>
 
-  <section class="cta-section" id="start">
-    <div class="cta-grid">
-      <div class="cta-copy pad">
-        <p class="reveal">Point it at a server you run. See what it actually does.</p>
-        <div class="ctas reveal">
-          <a class="btn" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
-          <a class="textlink" href="https://github.com/mbishflavien/mcp-xray#getting-started" target="_blank" rel="noopener">Read the quickstart</a>
-        </div>
-      </div>
-      <div class="cta-still reveal">
-        <img src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" width="854" height="480" alt="Dusk settling over Half Dome, Yosemite" loading="lazy">
+  <section class="pad cta-section" id="start">
+    <div class="glass panel cta-copy reveal">
+      <p>Point it at a server you run. See what it actually does.</p>
+      <div class="ctas">
+        <a class="btn" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
+        <a class="textlink" href="https://github.com/mbishflavien/mcp-xray#getting-started" target="_blank" rel="noopener">Read the quickstart</a>
       </div>
     </div>
   </section>
@@ -419,6 +413,7 @@ footer{padding-block:48px 28px}
 </main>
 
 <footer class="pad">
+ <div class="glass panel">
   <div class="foot-row">
     <span>mcp-xray, a security scanner for MCP servers</span>
     <span class="links">
@@ -429,6 +424,7 @@ footer{padding-block:48px 28px}
     <span class="end">2026</span>
   </div>
   <p class="credit-line">Footage: <a href="https://commons.wikimedia.org/wiki/File:Sunset_on_Halfdome_timelapse_Yosemite_CA_2023-07-15_20-11-06_1.webm" target="_blank" rel="noopener">“Sunset on Halfdome,” Yosemite</a>, by G. Edward Johnson, CC BY 4.0, via Wikimedia Commons.</p>
+ </div>
 </footer>
 
 <script>
