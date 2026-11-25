@@ -8,16 +8,16 @@
 <meta property="og:title" content="mcp-xray">
 <meta property="og:description" content="One less thing your team has to watch.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23181715'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23bfb21a' stroke-width='2.4'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230f0f0f'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23dba05a' stroke-width='2.4'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 /* ── tokens ──────────────────────────────────────────────────────────── */
 :root{
-  --bg:#e8e8e3; --surface:#dcdcd6; --ink:#181715; --muted:#48473f;
-  --accent:#9c8f16; --accent-ink:#181715;
-  --field-1:#181715; --field-1-ink:#eeeee8; --field-1-muted:#a3a19a;
+  --bg:#0f0f0f; --surface:#1a1a1a; --surface-2:#232323; --ink:#efefed; --muted:#a9a9a4;
+  --accent:#dba05a; --accent-ink:#14110b;
+  --glass:rgba(20,18,14,.44); --glass-border:rgba(243,241,236,.16);
 
   --face:'Work Sans',system-ui,sans-serif;
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
@@ -47,8 +47,6 @@ button{font-family:inherit}
   font-size:var(--step-small);font-weight:500;background:var(--ink);color:var(--bg);
   transition:background .2s ease,color .2s ease}
 .btn:hover{background:var(--accent);color:var(--accent-ink)}
-.on-dark .btn{background:var(--field-1-ink);color:var(--field-1)}
-.on-dark .btn:hover{background:var(--accent);color:var(--accent-ink)}
 .textlink{font-size:var(--step-small);font-weight:500;border-bottom:1px solid currentColor;padding-bottom:2px} /* taste-skill-ignore: a link underline, not a divider */
 .textlink:hover{color:var(--accent)}
 
@@ -72,17 +70,17 @@ nav.top{position:relative;z-index:5;background:var(--bg)}
 .hero::after{content:"";position:absolute;inset:0;background:rgba(10,9,7,.34);pointer-events:none}
 .hero-panel{position:relative;z-index:2;max-width:640px;margin:0 var(--marginR) 0 var(--margin);
   padding:2.6rem 2.6rem 2.8rem;border-radius:18px;
-  background:rgba(20,18,14,.42);border:1px solid rgba(238,238,232,.16); /* taste-skill-ignore: glass panel kept by explicit client request */
+  background:var(--glass);border:1px solid var(--glass-border); /* taste-skill-ignore: glass panel kept by explicit client request */
   backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%); /* taste-skill-ignore: glass panel kept by explicit client request */
-  color:var(--field-1-ink)}
-.hero h1{font-size:var(--step-display);color:var(--field-1-ink)}
-.hero .lede{margin-top:1.1rem;font-size:var(--step-lead);color:var(--field-1-muted);max-width:46ch;font-weight:300;line-height:1.4}
+  color:var(--ink)}
+.hero h1{font-size:var(--step-display);color:var(--ink)}
+.hero .lede{margin-top:1.1rem;font-size:var(--step-lead);color:var(--muted);max-width:46ch;font-weight:300;line-height:1.4}
 .hero .ctas{display:flex;align-items:center;gap:1.5rem;margin-top:1.9rem;flex-wrap:wrap}
-.hero .ctas .textlink{color:var(--field-1-ink)}
+.hero .ctas .textlink{color:var(--ink)}
 .hero-caption{position:absolute;z-index:2;right:var(--marginR);bottom:28px;margin:0;
-  font-size:var(--step-small);color:var(--field-1-muted)}
+  font-size:var(--step-small);color:var(--muted)}
 
-section{padding-block:140px}
+section{padding-block:108px}
 .head{max-width:var(--col);margin-bottom:64px}
 .head h2{font-size:var(--step-head);font-weight:300}
 
@@ -97,33 +95,36 @@ section{padding-block:140px}
 .how .stage-wrap{position:sticky;top:14vh;align-self:start}
 
 /* a real fragment of the CLI, not a screenshot */
-[data-ui]{background:var(--field-1);color:var(--field-1-ink);border-radius:10px;overflow:hidden;
+[data-ui]{background:var(--surface-2);color:var(--ink);border-radius:10px;overflow:hidden;
   font-size:var(--step-small);box-shadow:0 1px 0 rgba(255,255,255,.04) inset}
-[data-ui] .bar{display:flex;align-items:center;height:38px;padding:0 16px;color:var(--field-1-muted);
+[data-ui] .bar{display:flex;align-items:center;height:38px;padding:0 16px;color:var(--muted);
   border-bottom:1px solid rgba(255,255,255,.08)}
 [data-ui] .body{padding:20px 22px;min-height:260px}
-[data-ui] .row{padding:.35em 0;color:var(--field-1-muted)}
-[data-ui] .row.on{color:var(--field-1-ink)}
+[data-ui] .row{padding:.35em 0;color:var(--muted)}
+[data-ui] .row.on{color:var(--ink)}
 [data-ui] .sev{display:inline-block;width:1.4em}
-[data-ui] .sev.high{color:#d99a4e}
-[data-ui] .sev.info{color:var(--field-1-muted)}
+[data-ui] .sev.high{color:#e2793f}
+[data-ui] .sev.info{color:var(--muted)}
 [data-ui] .sev.low{color:#8aa6c2}
 [data-ui] .state{display:none}
 [data-ui] .state.on{display:block}
 
 /* ── proof: plain names in columns, real mutation kinds ─────────────── */
-.proof-cols{columns:4 180px;column-gap:40px}
+.proof-layout{display:grid;grid-template-columns:1.6fr 1fr;gap:3rem;align-items:center}
+.proof-cols{columns:2 170px;column-gap:40px}
 .proof-cols .kind{break-inside:avoid;margin-bottom:28px}
 .proof-cols .kind .label{font-size:var(--step-small);color:var(--muted);margin-bottom:.4rem}
 .proof-cols .kind .name{font-size:var(--step-body);line-height:1.55}
+.proof-still{border-radius:10px;overflow:hidden;align-self:stretch}
+.proof-still img{width:100%;height:100%;object-fit:cover;min-height:360px}
 
 /* ── breath: second clip, one quiet line ─────────────────────────────── */
 .breath{position:relative;min-height:62vh;display:flex;align-items:center;justify-content:center;overflow:hidden;padding-block:0}
 .breath video, .breath .poster{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .breath::after{content:"";position:absolute;inset:0;background:rgba(10,9,7,.22)}
 .breath p{position:relative;z-index:2;max-width:30ch;text-align:center;font-size:var(--step-lead);font-weight:300;
-  color:var(--field-1-ink);padding:1.1rem 1.6rem;border-radius:14px;
-  background:rgba(20,18,14,.38);border:1px solid rgba(238,238,232,.14); /* taste-skill-ignore: same deliberate glass device as the hero */
+  color:var(--ink);padding:1.1rem 1.6rem;border-radius:14px;
+  background:var(--glass);border:1px solid var(--glass-border); /* taste-skill-ignore: same deliberate glass device as the hero */
   backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)} /* taste-skill-ignore: same deliberate glass device as the hero */
 
 /* ── features: staggered fragment cells ──────────────────────────────── */
@@ -141,9 +142,9 @@ section{padding-block:140px}
 .severity-demo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 /* taste-skill-ignore: a plain toggle control inside a data-ui fragment, not a card ornament */
 .severity-demo button{height:30px;padding:0 12px;border-radius:3px;border:1px solid rgba(255,255,255,.18);
-  background:transparent;color:var(--field-1-muted);font-size:var(--step-small);cursor:pointer}
-.severity-demo button.active{background:var(--field-1-ink);color:var(--field-1);border-color:var(--field-1-ink)}
-.severity-demo .exit{font-variant-numeric:tabular-nums;color:var(--field-1-ink)}
+  background:transparent;color:var(--muted);font-size:var(--step-small);cursor:pointer}
+.severity-demo button.active{background:var(--ink);color:var(--surface-2);border-color:var(--ink)}
+.severity-demo .exit{font-variant-numeric:tabular-nums;color:var(--ink)}
 .severity-demo .exit b{color:var(--accent)}
 
 /* ── list: two-ended rows, built vs next ─────────────────────────────── */
@@ -156,13 +157,12 @@ section{padding-block:140px}
 .next .dot{background:var(--muted);opacity:.5}
 .next li{color:var(--muted)}
 
-/* ── cta: dark field, almost empty ───────────────────────────────────── */
-.cta-section{background:var(--field-1);color:var(--field-1-ink)}
+/* ── cta: almost empty, closed on the right by a picture ─────────────── */
 .cta-grid{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:68vh}
 .cta-copy{padding-block:10vh}
-.cta-section p{font-size:var(--step-lead);font-weight:300;max-width:34ch;color:var(--field-1-ink)}
+.cta-section p{font-size:var(--step-lead);font-weight:300;max-width:34ch;color:var(--ink)}
 .cta-section .ctas{display:flex;align-items:center;gap:1.6rem;margin-top:1.6rem;flex-wrap:wrap}
-.cta-section .textlink{color:var(--field-1-muted)}
+.cta-section .textlink{color:var(--muted)}
 .cta-still{position:relative;align-self:stretch;overflow:hidden}
 .cta-still img{width:100%;height:100%;object-fit:cover;filter:grayscale(.3) brightness(.78)}
 
@@ -190,6 +190,8 @@ footer{padding-block:48px 28px}
   .feat-grid{grid-template-columns:1fr}
   .feat-cell{min-height:0}
   .status-cols{grid-template-columns:1fr;gap:2.4rem}
+  .proof-layout{grid-template-columns:1fr}
+  .proof-still{margin-top:2rem;height:34vh}
   .proof-cols{columns:2 160px}
   section{padding-block:88px}
   .cta-grid{grid-template-columns:1fr;min-height:0}
@@ -221,7 +223,7 @@ footer{padding-block:48px 28px}
       poster="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023-poster.jpg" aria-hidden="true">
       <source src="assets/sunset-on-halfdome-timelapse-yosemite-ca-2023.webm" type="video/webm">
     </video>
-    <div class="hero-panel on-dark reveal">
+    <div class="hero-panel reveal">
       <h1>One less thing to watch.</h1>
       <p class="lede">mcp-xray calls every tool on your MCP server with the inputs that break things, sandboxed, so nothing it finds can turn around and touch your team.</p>
       <div class="ctas">
@@ -286,17 +288,24 @@ footer{padding-block:48px 28px}
     </div>
   </section>
 
-  <section class="pad">
-    <div class="head reveal">
-      <h2>What it actually tries.</h2>
-    </div>
-    <div class="proof-cols reveal">
-      <div class="kind"><div class="label">shape</div><div class="name">missing required field</div><div class="name">mass assignment</div></div>
-      <div class="kind"><div class="label">size</div><div class="name">oversized string</div></div>
-      <div class="kind"><div class="label">path</div><div class="name">path traversal</div></div>
-      <div class="kind"><div class="label">encoding</div><div class="name">embedded null byte</div></div>
-      <div class="kind"><div class="label">injection</div><div class="name">SQL injection</div><div class="name">shell injection</div><div class="name">template injection</div></div>
-      <div class="kind"><div class="label">type</div><div class="name">type confusion</div></div>
+  <section class="pad proof-section">
+    <div class="proof-layout">
+      <div>
+        <div class="head reveal" style="margin-bottom:40px">
+          <h2>What it actually tries.</h2>
+        </div>
+        <div class="proof-cols reveal">
+          <div class="kind"><div class="label">shape</div><div class="name">missing required field</div><div class="name">mass assignment</div></div>
+          <div class="kind"><div class="label">size</div><div class="name">oversized string</div></div>
+          <div class="kind"><div class="label">path</div><div class="name">path traversal</div></div>
+          <div class="kind"><div class="label">encoding</div><div class="name">embedded null byte</div></div>
+          <div class="kind"><div class="label">injection</div><div class="name">SQL injection</div><div class="name">shell injection</div><div class="name">template injection</div></div>
+          <div class="kind"><div class="label">type</div><div class="name">type confusion</div></div>
+        </div>
+      </div>
+      <div class="proof-still reveal">
+        <img src="assets/mountain-moment-berkeley-park-flowers-poster.jpg" width="854" height="480" alt="A wildflower meadow at Mount Rainier" loading="lazy">
+      </div>
     </div>
   </section>
 
