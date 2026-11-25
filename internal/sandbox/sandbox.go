@@ -19,7 +19,7 @@ import (
 // DefaultTimeout is a sensible default for Run's timeout parameter: generous
 // for a probe doing in-memory parsing/generation, short enough that a
 // malicious input can't hang the scan indefinitely.
-const DefaultTimeout = 10 * time.Second
+const DefaultTimeout = 30 * time.Second
 
 // memoryLimitPages caps a probe's WASI linear memory at 16MiB (16MiB /
 // 64KiB-per-page). wazero's default is 4GB; a probe generating payloads
