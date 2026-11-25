@@ -2,6 +2,7 @@ package schemafuzz
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -16,6 +17,48 @@ func kindCounts(t *testing.T, toolName string, schema string) map[string]int {
 		counts[m.Kind]++
 	}
 	return counts
+}
+
+// TestGenerateCapsAnAdversarialSchema confirms a schema with far more
+// properties than any reasonable tool would declare doesn't blow up
+// Generate's output. A malicious or buggy MCP server could otherwise use
+// this to exhaust the scanner's own memory and the time a scan takes.
+func TestGenerateCapsAnAdversarialSchema(t *testing.T) {
+	const propertyCount = 10_000
+
+	properties := make(map[string]map[string]string, propertyCount)
+	required := make([]string, 0, propertyCount)
+	for i := range propertyCount {
+		name := fmt.Sprintf("field_%d", i)
+		properties[name] = map[string]string{"type": "string"}
+		required = append(required, name)
+	}
+	schema, err := json.Marshal(map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"required":   required,
+	})
+	if err != nil {
+		t.Fatalf("marshal adversarial schema: %v", err)
+	}
+
+	mutations, errMsg := Generate("greet", schema)
+	if errMsg != "" {
+		t.Fatalf("Generate() error: %s", errMsg)
+	}
+
+	// Each capped field can drive at most len(stringMutationTable)
+	// mutations, plus one missing_required entry, plus one
+	// mass-assignment mutation overall - nowhere near
+	// propertyCount * (len(stringMutationTable) + 1).
+	maxExpected := maxSchemaFields*(len(stringMutationTable)+1) + 1
+	if len(mutations) > maxExpected {
+		t.Errorf("Generate() produced %d mutations from %d properties, want at most %d",
+			len(mutations), propertyCount, maxExpected)
+	}
+	if len(mutations) == 0 {
+		t.Error("Generate() produced no mutations at all, want some (just capped)")
+	}
 }
 
 func TestGenerateMissingRequired(t *testing.T) {

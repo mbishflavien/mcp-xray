@@ -28,6 +28,15 @@ type propertySpec struct {
 
 const oversizedStringLen = 100_000
 
+// maxSchemaFields caps how many required entries and how many properties
+// Generate will fuzz. A malicious or buggy MCP server could otherwise
+// advertise a tool with an enormous schema - each property can drive
+// several mutations, one of them a 100KB string - to blow up the
+// scanner's own memory and the time a scan takes (thousands of real
+// CallTool invocations against the target). 200 is already far more than
+// any reasonable tool declares.
+const maxSchemaFields = 200
+
 // Generate returns the mutations to try for the given tool and schema, or
 // an error message (not a Go error, since this crosses the WASI boundary as
 // plain JSON) if the schema can't be parsed.
@@ -36,6 +45,7 @@ func Generate(toolName string, schema json.RawMessage) ([]probeproto.Mutation, s
 	if err := json.Unmarshal(schema, &s); err != nil {
 		return nil, fmt.Sprintf("parse schema: %v", err)
 	}
+	s = capSchema(s)
 
 	base := baseArgs(s)
 	var mutations []probeproto.Mutation
@@ -111,6 +121,30 @@ func stringMutations(toolName, name string, base map[string]any) []probeproto.Mu
 		})
 	}
 	return out
+}
+
+// capSchema trims an oversized schema down to maxSchemaFields required
+// entries and maxSchemaFields properties, so every downstream step
+// (baseArgs, the mutation loops, the mass-assignment check) naturally
+// respects the cap without each needing its own counter. Map iteration
+// order is unspecified, so which fields survive is arbitrary, not
+// necessarily the "first" ones - that's fine, this is a bound on scanner
+// resource use, not a guarantee of which fields get tested.
+func capSchema(s objectSchema) objectSchema {
+	if len(s.Required) > maxSchemaFields {
+		s.Required = s.Required[:maxSchemaFields]
+	}
+	if len(s.Properties) > maxSchemaFields {
+		trimmed := make(map[string]propertySpec, maxSchemaFields)
+		for name, prop := range s.Properties {
+			if len(trimmed) >= maxSchemaFields {
+				break
+			}
+			trimmed[name] = prop
+		}
+		s.Properties = trimmed
+	}
+	return s
 }
 
 // baseArgs builds a minimal valid-looking argument set so each mutation only
