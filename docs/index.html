@@ -24,11 +24,12 @@
   --step-body:  clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
   --step-lead:  clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
   --step-head:  clamp(2rem, 1.3rem + 3.2vw, 4rem);
-  --step-display: clamp(2.4rem, 1.4rem + 4.4vw, 4.6rem);
+  --step-display: clamp(2.4rem, 1.35rem + 4.6vw, 5rem);
 
   --margin: max(32px, env(safe-area-inset-left,0px) + 16px);
   --marginR: max(32px, env(safe-area-inset-right,0px) + 16px);
   --col: 620px;
+  --radius: 16px;
 
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
@@ -41,17 +42,17 @@ body{background:var(--bg);color:var(--ink);font-family:var(--face);font-weight:4
 .bg-sky{position:fixed;inset:0;z-index:-2;overflow:hidden;
   background:linear-gradient(115deg,#0a0d13,#101a26,#1c3a56,#a85a33,#e3a94a,#f3dfb8,#e3a94a,#a85a33,#1c3a56,#101a26,#0a0d13); /* taste-skill-ignore: the client's explicit request is literally "a gradient of all those sunset colours, looping" as the page background, not a decorative UI gradient */
   background-size:320% 320%;
-  animation:skyShift 90s ease-in-out infinite}
+  animation:skyShift 48s ease-in-out infinite}
 @keyframes skyShift{0%{background-position:0% 30%}50%{background-position:100% 70%}100%{background-position:0% 30%}}
-.bg-sky::after{content:"";position:absolute;inset:0;background-image:var(--grain);background-size:160px;
-  opacity:.4;mix-blend-mode:overlay;pointer-events:none}
+.bg-sky::after{content:"";position:absolute;inset:0;background-image:var(--grain);background-size:120px;
+  opacity:.65;mix-blend-mode:overlay;pointer-events:none}
 .bg-scrim{position:fixed;inset:0;z-index:-1;background:rgba(6,5,4,.2);pointer-events:none}
 @media (prefers-reduced-motion:reduce){.bg-sky{animation:none;background-position:30% 50%}}
 
 /* ── glass: the shared content surface over the fixed video ──────────── */
 .glass{background:var(--glass);border:1px solid var(--glass-border); /* taste-skill-ignore: glass is the explicit, page-wide client brief, not ornament */
   backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%); /* taste-skill-ignore: glass is the explicit, page-wide client brief, not ornament */
-  border-radius:16px}
+  border-radius:var(--radius)}
 h1,h2,h3{font-family:var(--face);font-weight:300;letter-spacing:-0.02em;line-height:1.02;margin:0}
 p{margin:0}
 a{color:inherit;text-decoration:none}
@@ -61,7 +62,7 @@ img,video{max-width:100%;display:block}
 button{font-family:inherit}
 
 /* ── buttons: one shape, used everywhere ───────────────────────────── */
-.btn{display:inline-flex;align-items:center;height:44px;padding:0 20px;border-radius:3px;
+.btn{display:inline-flex;align-items:center;height:44px;padding:0 20px;border-radius:var(--radius);
   font-size:var(--step-small);font-weight:500;background:var(--ink);color:var(--bg);
   transition:background .2s ease,color .2s ease}
 .btn:hover{background:var(--accent);color:var(--accent-ink)}
@@ -72,7 +73,7 @@ button{font-family:inherit}
 /* nav sits inset from the viewport edges, by the same margin everything
    else uses - the background video is the one thing that stays full-bleed */
 nav.top{position:sticky;top:1cm;z-index:5;margin:1cm var(--marginR) 0 var(--margin);
-  background:#050403;border-radius:0 0 12px 12px;overflow:hidden}
+  background:#050403;border-radius:var(--radius);overflow:hidden}
 nav.top::before{content:"";position:absolute;inset:0;background-image:var(--grain);background-size:140px;
   opacity:.5;mix-blend-mode:overlay;pointer-events:none}
 .nav-row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:1.5rem;height:68px;
@@ -88,15 +89,12 @@ nav.top::before{content:"";position:absolute;inset:0;background-image:var(--grai
 @media (prefers-reduced-motion:reduce){.reveal{opacity:1!important;transform:none!important;transition:none!important}}
 
 /* ── hero: the shared background shows through here first ────────────── */
-.hero{position:relative;min-height:88vh;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:2rem}
-.hero-panel{max-width:600px;margin-left:var(--margin);padding:2.6rem 2.6rem 2.8rem;color:var(--ink)}
+.hero{position:relative;min-height:88vh;display:flex;align-items:center}
+.hero-panel{max-width:640px;margin:0 var(--marginR) 0 var(--margin);padding:2.6rem 2.6rem 2.8rem;color:var(--ink)}
 .hero h1{font-size:var(--step-display);color:var(--ink)}
 .hero .lede{margin-top:1.1rem;font-size:var(--step-lead);color:var(--muted);max-width:46ch;font-weight:300;line-height:1.4}
 .hero .ctas{display:flex;align-items:center;gap:1.5rem;margin-top:1.9rem;flex-wrap:wrap}
 .hero .ctas .textlink{color:var(--ink)}
-.hero-demo{width:380px;flex-shrink:0;margin-right:var(--marginR)}
-.hero-demo .sev.medium{color:var(--accent)}
-.hero-demo .tally{margin-top:1em;color:var(--ink)}
 
 section{padding-block:22px}
 .panel{padding:56px}
@@ -114,7 +112,7 @@ section{padding-block:22px}
 .how .stage-wrap{position:sticky;top:14vh;align-self:start}
 
 /* a real fragment of the CLI, not a screenshot */
-[data-ui]{background:var(--surface-2);color:var(--ink);border-radius:10px;overflow:hidden;
+[data-ui]{background:var(--surface-2);color:var(--ink);border-radius:var(--radius);overflow:hidden;
   font-size:var(--step-small);box-shadow:0 1px 0 rgba(255,255,255,.04) inset}
 [data-ui] .bar{display:flex;align-items:center;height:38px;padding:0 16px;color:var(--muted);
   border-bottom:1px solid rgba(255,255,255,.08)}
@@ -136,7 +134,7 @@ section{padding-block:22px}
 
 /* ── features: staggered fragment cells ──────────────────────────────── */
 .feat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.feat-cell{background:rgba(255,255,255,.045);border-radius:4px;min-height:400px;display:flex;flex-direction:column;overflow:hidden}
+.feat-cell{background:rgba(255,255,255,.045);border-radius:var(--radius);min-height:400px;display:flex;flex-direction:column;overflow:hidden}
 .feat-cell .text{padding:24px}
 .feat-cell .text h3{font-size:var(--step-body);font-weight:500;letter-spacing:-0.01em}
 .feat-cell .text p{margin-top:.6rem;font-size:var(--step-body);color:var(--muted);line-height:1.5;max-width:42ch}
@@ -148,7 +146,7 @@ section{padding-block:22px}
 
 .severity-demo{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 /* taste-skill-ignore: a plain toggle control inside a data-ui fragment, not a card ornament */
-.severity-demo button{height:30px;padding:0 12px;border-radius:3px;border:1px solid rgba(255,255,255,.18);
+.severity-demo button{height:30px;padding:0 12px;border-radius:var(--radius);border:1px solid rgba(255,255,255,.18);
   background:transparent;color:var(--muted);font-size:var(--step-small);cursor:pointer}
 .severity-demo button.active{background:var(--ink);color:var(--surface-2);border-color:var(--ink)}
 .severity-demo .exit{font-variant-numeric:tabular-nums;color:var(--ink)}
@@ -189,7 +187,6 @@ footer .panel{padding:28px 32px}
 @media (max-width:900px){
   .hero{min-height:82vh}
   .hero-panel{margin:0 var(--marginR) 0 var(--margin);padding:2rem 1.8rem 2.2rem;max-width:none}
-  .hero-demo{display:none}
   .how{grid-template-columns:1fr}
   .how .stage-wrap{position:static;margin-top:2rem}
   .how .step{min-height:0;padding:2.4rem 0}
@@ -230,15 +227,6 @@ footer .panel{padding:28px 32px}
       <div class="ctas">
         <a class="btn" href="https://github.com/mbishflavien/mcp-xray" target="_blank" rel="noopener">View on GitHub</a>
         <a class="textlink" href="#start">Read the quickstart</a>
-      </div>
-    </div>
-    <div class="hero-demo reveal" data-ui>
-      <div class="bar">mcp-xray -- ./your-server</div>
-      <div class="body" style="min-height:0;padding:18px 20px">
-        <div class="row on"><span class="sev high">high</span>process: null_byte_injection: crash</div>
-        <div class="row"><span class="sev medium">medium</span>process: oversized_string: internal_error</div>
-        <div class="row"><span class="sev info">info</span>sql_injection: rejected, not reported</div>
-        <div class="row tally">3 findings · exit code: 1</div>
       </div>
     </div>
   </section>
