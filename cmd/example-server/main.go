@@ -38,19 +38,6 @@ func main() {
 			}, nil, nil
 		})
 
-	// process is deliberately broken: a null byte in its input crashes
-	// the whole server process. This exists so mcp-xray's schema-fuzz
-	// null-byte mutation has something real to catch end to end.
-	mcp.AddTool(server, &mcp.Tool{Name: "process", Description: "process some data"},
-		func(_ context.Context, _ *mcp.CallToolRequest, args processArgs) (*mcp.CallToolResult, any, error) {
-			if strings.Contains(args.Data, "\x00") {
-				panic("process: null byte in data")
-			}
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: "processed: " + args.Data}},
-			}, nil, nil
-		})
-
 	// slow_echo deliberately hangs well past any reasonable per-call
 	// timeout, so mcp-xray's timeout handling has something real to
 	// catch end to end.
@@ -72,6 +59,21 @@ func main() {
 		func(_ context.Context, _ *mcp.CallToolRequest, _ deleteAllRecordsArgs) (*mcp.CallToolResult, any, error) {
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: "deleted"}},
+			}, nil, nil
+		})
+
+	// process is deliberately broken: a null byte in its input crashes
+	// the whole server process. Registered last so its crash doesn't
+	// poison any tool after it - delete_all_records is unaffected
+	// either way, since the safety gate blocks it before a real call is
+	// ever attempted, dead connection or not.
+	mcp.AddTool(server, &mcp.Tool{Name: "process", Description: "process some data"},
+		func(_ context.Context, _ *mcp.CallToolRequest, args processArgs) (*mcp.CallToolResult, any, error) {
+			if strings.Contains(args.Data, "\x00") {
+				panic("process: null byte in data")
+			}
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: "processed: " + args.Data}},
 			}, nil, nil
 		})
 
