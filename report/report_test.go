@@ -40,6 +40,46 @@ func TestTextWriter(t *testing.T) {
 	}
 }
 
+// TestTextWriterSanitizesAttackerControlledFields confirms a malicious
+// target server can't inject terminal escape sequences or forge fake
+// report lines via embedded control characters/newlines in its own
+// name, a tool name, or a tool response (Evidence) - mcp-xray's own
+// threat model is that the server under test may be malicious.
+func TestTextWriterSanitizesAttackerControlledFields(t *testing.T) {
+	r := Result{
+		ServerName:    "evil\x1b[31mserver",
+		ServerVersion: "1.0.0",
+		Findings: []findings.Finding{{
+			ProbeID:  "schema-fuzz",
+			Severity: findings.Low,
+			Title:    "oversized_string: accepted_invalid",
+			Target:   "tool\x1b]52;c;ZWNobyBwd25lZA==\x07name",
+			Evidence: "line one\n[critical] fake-tool: fabricated finding\nline two",
+		}},
+	}
+
+	var buf bytes.Buffer
+	if err := Text().Write(&buf, r); err != nil {
+		t.Fatalf("Write() error: %v", err)
+	}
+	out := buf.String()
+
+	if strings.ContainsRune(out, 0x1b) {
+		t.Errorf("text report contains a raw ESC byte, want it stripped:\n%q", out)
+	}
+	if strings.Contains(out, "fake-tool") == false {
+		t.Fatal("sanity check failed: expected text to still be present, just without the newlines around it")
+	}
+	// The embedded newlines in Evidence must not survive as newlines -
+	// otherwise the fabricated "[critical] fake-tool: ..." line reads as
+	// its own independent report entry rather than evidence text.
+	for line := range strings.SplitSeq(strings.TrimRight(out, "\n"), "\n") {
+		if strings.HasPrefix(line, "[critical]") {
+			t.Errorf("a line injected via Evidence's embedded newline appears as its own report entry: %q", line)
+		}
+	}
+}
+
 func TestTextWriterNoFindings(t *testing.T) {
 	var buf bytes.Buffer
 	r := sampleResult()
