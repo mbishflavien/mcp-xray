@@ -68,6 +68,13 @@ func (p *SchemaFuzz) RunTool(ctx context.Context, tc probe.ToolContext) ([]findi
 			Target:   tc.Tool.Name,
 			Evidence: evidenceFor(result, callErr),
 		})
+		if outcome == probe.OutcomeCrash {
+			// The tool's process (or the connection to it) is dead. Every
+			// remaining mutation against this same tool would just
+			// rediscover the same crash, not a new one - stop here
+			// instead of piling up duplicate findings.
+			break
+		}
 	}
 	return out, nil
 }

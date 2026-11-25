@@ -73,10 +73,12 @@ func TestSchemaFuzzRunToolAllRejected(t *testing.T) {
 	}
 }
 
-func TestSchemaFuzzRunToolCrash(t *testing.T) {
+func TestSchemaFuzzRunToolStopsAfterFirstCrash(t *testing.T) {
 	ctx := context.Background()
+	var calls int
 	caller := &stubCaller{
 		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
 			return nil, mcp.ErrConnectionClosed
 		},
 	}
@@ -86,15 +88,21 @@ func TestSchemaFuzzRunToolCrash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunTool() error: %v", err)
 	}
-	if len(out) == 0 {
-		t.Fatal("expected findings when every mutation crashes the connection")
+
+	// greetTool has more than one string mutation; every one of them
+	// would crash, but RunTool should stop calling once the connection
+	// is known dead instead of generating one duplicate finding per
+	// remaining mutation.
+	if calls != 1 {
+		t.Errorf("CallTool was invoked %d times, want exactly 1 (stop after the first crash)", calls)
 	}
-	for _, f := range out {
-		if f.Severity != findings.High {
-			t.Errorf("finding %q severity = %v, want High (crash)", f.Title, f.Severity)
-		}
-		if f.Evidence == "" {
-			t.Error("a crash finding should carry the error as evidence")
-		}
+	if len(out) != 1 {
+		t.Fatalf("got %d findings, want exactly 1", len(out))
+	}
+	if out[0].Severity != findings.High {
+		t.Errorf("finding severity = %v, want High (crash)", out[0].Severity)
+	}
+	if out[0].Evidence == "" {
+		t.Error("a crash finding should carry the error as evidence")
 	}
 }

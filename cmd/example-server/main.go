@@ -24,7 +24,9 @@ type slowEchoArgs struct {
 	Text string `json:"text" jsonschema:"text to echo back slowly"`
 }
 
-type deleteAllRecordsArgs struct{}
+type deleteAllRecordsArgs struct {
+	Table string `json:"table" jsonschema:"the table to delete every record from"`
+}
 
 func main() {
 	server := mcp.NewServer(&mcp.Implementation{Name: "example-server", Version: "0.1.0"}, nil)
