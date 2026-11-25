@@ -39,6 +39,47 @@ func startTestServer(ctx context.Context, t *testing.T) *Session {
 	return session
 }
 
+// TestSnapshotCapsToolCount confirms Snapshot doesn't collect an
+// unbounded number of tools from a server. The SDK's own pagination has
+// no cap on page count, so a malicious or buggy server returning many
+// more tools than any real one would is exactly the scenario maxListItems
+// exists to bound.
+func TestSnapshotCapsToolCount(t *testing.T) {
+	old := maxListItems
+	maxListItems = 3
+	t.Cleanup(func() { maxListItems = old })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "many-tools-server", Version: "1.0.0"}, nil)
+	for i := range 10 {
+		name := "tool_" + string(rune('a'+i))
+		mcp.AddTool(server, &mcp.Tool{Name: name, Description: "a tool"},
+			func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+				return &mcp.CallToolResult{}, nil, nil
+			})
+	}
+
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {
+		t.Fatalf("server.Connect() error: %v", err)
+	}
+	session, err := Connect(ctx, clientTransport)
+	if err != nil {
+		t.Fatalf("Connect() error: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+
+	snap, err := session.Snapshot(ctx)
+	if err != nil {
+		t.Fatalf("Snapshot() error: %v", err)
+	}
+	if len(snap.Tools) != 3 {
+		t.Errorf("Snapshot() collected %d tools from a 10-tool server with maxListItems=3, want exactly 3", len(snap.Tools))
+	}
+}
+
 func TestSnapshot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

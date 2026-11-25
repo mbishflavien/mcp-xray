@@ -51,6 +51,15 @@ func (s *Session) CallTool(ctx context.Context, name string, args map[string]any
 	return s.session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
 }
 
+// maxListItems caps how many tools, resources, or prompts Snapshot will
+// collect from a single server. The SDK's pagination has no built-in
+// limit on page count: a malicious or buggy server could keep returning
+// a nextCursor forever, growing these slices (and the scan that follows)
+// without bound. 10,000 is far more than any real server advertises.
+// A var, not a const, so tests can exercise the cap without needing to
+// register 10,000 real tools.
+var maxListItems = 10_000
+
 // CapabilitySnapshot is everything a server advertised at connect time.
 type CapabilitySnapshot struct {
 	ServerName    string
@@ -75,6 +84,9 @@ func (s *Session) Snapshot(ctx context.Context) (*CapabilitySnapshot, error) {
 			return nil, fmt.Errorf("list tools: %w", err)
 		}
 		snap.Tools = append(snap.Tools, tool)
+		if len(snap.Tools) >= maxListItems {
+			break
+		}
 	}
 
 	for resource, err := range s.session.Resources(ctx, nil) {
@@ -82,6 +94,9 @@ func (s *Session) Snapshot(ctx context.Context) (*CapabilitySnapshot, error) {
 			return nil, fmt.Errorf("list resources: %w", err)
 		}
 		snap.Resources = append(snap.Resources, resource)
+		if len(snap.Resources) >= maxListItems {
+			break
+		}
 	}
 
 	for prompt, err := range s.session.Prompts(ctx, nil) {
@@ -89,6 +104,9 @@ func (s *Session) Snapshot(ctx context.Context) (*CapabilitySnapshot, error) {
 			return nil, fmt.Errorf("list prompts: %w", err)
 		}
 		snap.Prompts = append(snap.Prompts, prompt)
+		if len(snap.Prompts) >= maxListItems {
+			break
+		}
 	}
 
 	return snap, nil
