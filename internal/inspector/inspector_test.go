@@ -63,3 +63,33 @@ func TestSnapshot(t *testing.T) {
 		t.Errorf("prompts = %v, want one prompt named welcome", snap.Prompts)
 	}
 }
+
+func TestCallTool(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session := startTestServer(ctx, t)
+
+	result, err := session.CallTool(ctx, "greet", map[string]any{"name": "Flavien"})
+	if err != nil {
+		t.Fatalf("CallTool() error: %v", err)
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("result.Content = %v, want one item", result.Content)
+	}
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || text.Text != "Hi Flavien" {
+		t.Errorf("result.Content[0] = %v, want text %q", result.Content[0], "Hi Flavien")
+	}
+}
+
+func TestCallToolUnknownTool(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session := startTestServer(ctx, t)
+
+	if _, err := session.CallTool(ctx, "does-not-exist", nil); err == nil {
+		t.Error("CallTool() with an unknown tool name: want an error, got nil")
+	}
+}

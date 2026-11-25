@@ -44,6 +44,13 @@ func (s *Session) Close() error {
 	return s.session.Close()
 }
 
+// CallTool calls the named tool with the given arguments. It satisfies
+// probe.ToolCaller structurally, so probes never need to import this
+// package directly.
+func (s *Session) CallTool(ctx context.Context, name string, args map[string]any) (*mcp.CallToolResult, error) {
+	return s.session.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+}
+
 // CapabilitySnapshot is everything a server advertised at connect time.
 type CapabilitySnapshot struct {
 	ServerName    string
