@@ -44,6 +44,39 @@ probes; the live terminal dashboard; an HTTP/Streamable transport; and
 caching the compiled WASI module across probe runs (every sandboxed call
 currently recompiles it, which is correct but slow).
 
+### Hardening against the server it's scanning
+
+mcp-xray's own threat model is that the MCP server being scanned may be
+malicious or compromised, not just buggy - so mcp-xray has to defend
+itself against that server, not only probe it. A security-tooling-focused
+pass found and fixed several gaps in that:
+
+- The WASI sandbox had no execution deadline or memory cap. `ctx`
+  cancellation in wazero is cooperative, not preemptive, so a probe stuck
+  in a loop (driven by an adversarial input) could hang its goroutine
+  forever. `Run` now enforces both (`WithCloseOnContextDone`, a 16MiB
+  memory limit).
+- A schema with an enormous number of properties could make the
+  schema-fuzz probe generate an unbounded number of mutations - each one
+  a real `CallTool` against the target, one of them a 100KB string.
+  Capped at 200 fields.
+- A tool's own response (or error text) was copied verbatim into a
+  Finding's `Evidence` with no length limit. Capped at 2000 bytes.
+- The text report printed `ServerName`, `ServerVersion`, a tool's name,
+  and `Evidence` - all attacker-controlled - straight to the terminal. A
+  malicious server could embed ANSI escape sequences (some terminals
+  interpret these as commands) or forge fake report lines via embedded
+  newlines. Now sanitized; JSON/SARIF needed no change since
+  `encoding/json` already escapes control characters.
+- `Snapshot`'s pagination had no cap on page count, so a server
+  returning an endless `nextCursor` could grow it (and the scan that
+  follows) without bound. Capped at 10,000 tools/resources/prompts.
+- The Go toolchain itself was on go1.26.5, which `govulncheck` showed has
+  15 reachable standard-library vulnerabilities (`net/http`,
+  `crypto/tls`, `crypto/x509`, `net/url`, `net/textproto`,
+  `encoding/asn1`). Upgraded to go1.26.11; `govulncheck ./...` now
+  reports none.
+
 ## Getting started
 
 ```bash
