@@ -103,7 +103,13 @@ func run(args []string) (int, error) {
 		policy.Allowlist[name] = true
 	}
 
-	runner := scan.NewRunner([]probe.Probe{builtinprobes.SchemaFuzz(), builtinprobes.AuthBypass(), builtinprobes.RateLimit()}, scan.Options{
+	// RateLimit runs first, deliberately: it only ever sends benign,
+	// valid-looking arguments, so its burst (and the latency it measures)
+	// gets a clean, still-fresh connection. Running it after schema-fuzz
+	// or auth-bypass would mean its baseline measurements - and its own
+	// crash detection - could be muddied by whatever those adversarial
+	// probes already did to the target first.
+	runner := scan.NewRunner([]probe.Probe{builtinprobes.RateLimit(), builtinprobes.SchemaFuzz(), builtinprobes.AuthBypass()}, scan.Options{
 		CallTimeout: *timeout,
 		Policy:      policy,
 	})
