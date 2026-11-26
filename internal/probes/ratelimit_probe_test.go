@@ -274,6 +274,39 @@ func TestRateLimitRunServerStopsStartingNewToolsPastMaxDuration(t *testing.T) {
 	}
 }
 
+// TestRateLimitRunServerStopsImmediatelyOnContextCancellation confirms
+// canceling the scan (e.g. Ctrl-C) stops a burst right away instead of
+// grinding through its remaining calls, and doesn't get misreported as a
+// rate-limit finding.
+func TestRateLimitRunServerStopsImmediatelyOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			if calls == 2 {
+				cancel() // simulate the scan being canceled mid-burst
+			}
+			return &mcp.CallToolResult{IsError: false}, nil
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if calls != 2 {
+		t.Errorf("CallTool was invoked %d times, want exactly 2 (stop immediately once canceled)", calls)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0: a scan cancellation isn't a rate-limit finding", len(out))
+	}
+}
+
 func TestRateLimitID(t *testing.T) {
 	if got := NewRateLimit().ID(); got != "rate-limit" {
 		t.Errorf("ID() = %q, want %q", got, "rate-limit")

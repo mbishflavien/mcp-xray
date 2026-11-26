@@ -145,6 +145,13 @@ func (p *RateLimit) burstTool(ctx context.Context, caller probe.ToolCaller, tool
 	reportedInternalError := false
 
 	for i := range burst {
+		if ctx.Err() != nil {
+			// The scan itself was canceled (e.g. Ctrl-C) - stop the burst
+			// immediately instead of grinding through its remaining
+			// calls. This isn't a rate-limit finding either way.
+			return out
+		}
+
 		callCtx, cancel := context.WithTimeout(ctx, timeout)
 		start := time.Now()
 		result, callErr := caller.CallTool(callCtx, toolName, args)
