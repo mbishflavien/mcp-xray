@@ -38,6 +38,10 @@ type leakyCounterArgs struct {
 	Note string `json:"note" jsonschema:"anything, unused"`
 }
 
+type throttledEchoArgs struct {
+	Text string `json:"text" jsonschema:"text to echo back"`
+}
+
 func main() {
 	server := mcp.NewServer(&mcp.Implementation{Name: "example-server", Version: "0.1.0"}, nil)
 
@@ -90,6 +94,25 @@ func main() {
 			}
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("count=%d", leakyCounterCalls)}},
+			}, nil, nil
+		})
+
+	// throttled_echo enforces a simple fixed call budget, so the
+	// rate-limit probe has a genuinely well-behaved tool to confirm it
+	// does NOT flag: one that rejects excess calls instead of accepting
+	// them forever.
+	var throttledEchoCalls int
+	mcp.AddTool(server, &mcp.Tool{Name: "throttled_echo", Description: "echo text back, up to a point"},
+		func(_ context.Context, _ *mcp.CallToolRequest, args throttledEchoArgs) (*mcp.CallToolResult, any, error) {
+			throttledEchoCalls++
+			if throttledEchoCalls > 3 {
+				return &mcp.CallToolResult{
+					IsError: true,
+					Content: []mcp.Content{&mcp.TextContent{Text: "rate limit exceeded"}},
+				}, nil, nil
+			}
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: args.Text}},
 			}, nil, nil
 		})
 
