@@ -19,6 +19,9 @@ var schemaFuzzWasm []byte
 //go:embed bin/authbypass.wasm
 var authBypassWasm []byte
 
+//go:embed bin/ratelimit.wasm
+var rateLimitWasm []byte
+
 // SchemaFuzzMutations runs the schema-fuzz probe sandboxed and returns the
 // adversarial payloads it generated for the given tool.
 func SchemaFuzzMutations(ctx context.Context, toolName string, schema json.RawMessage) ([]probeproto.Mutation, error) {
@@ -30,6 +33,20 @@ func SchemaFuzzMutations(ctx context.Context, toolName string, schema json.RawMe
 // tool.
 func AuthBypassMutations(ctx context.Context, toolName string, schema json.RawMessage) ([]probeproto.Mutation, error) {
 	return runMutationProbe(ctx, authBypassWasm, toolName, schema)
+}
+
+// RateLimitBaseline runs the rate-limit probe's generator sandboxed and
+// returns the single benign, valid-looking argument set it built for the
+// given tool - the args to repeat, unchanged, for every call in a burst.
+func RateLimitBaseline(ctx context.Context, toolName string, schema json.RawMessage) (map[string]any, error) {
+	mutations, err := runMutationProbe(ctx, rateLimitWasm, toolName, schema)
+	if err != nil {
+		return nil, err
+	}
+	if len(mutations) == 0 {
+		return map[string]any{}, nil
+	}
+	return mutations[0].Args, nil
 }
 
 // runMutationProbe sends a MutationRequest to a sandboxed WASI probe and

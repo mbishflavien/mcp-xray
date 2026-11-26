@@ -83,3 +83,31 @@ func TestAuthBypassMutationsInvalidSchema(t *testing.T) {
 		t.Error("AuthBypassMutations() with invalid schema should return an error")
 	}
 }
+
+func TestRateLimitBaselineEndToEnd(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	schema := json.RawMessage(`{
+		"type": "object",
+		"properties": {"name": {"type": "string"}}
+	}`)
+
+	args, err := RateLimitBaseline(ctx, "greet", schema)
+	if err != nil {
+		t.Fatalf("RateLimitBaseline() error: %v", err)
+	}
+	if args["name"] != "mcp-xray-probe" {
+		t.Errorf("baseline args = %v, want name filled with a valid-looking placeholder", args)
+	}
+}
+
+func TestRateLimitBaselineInvalidSchema(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := RateLimitBaseline(ctx, "greet", json.RawMessage(`not json`))
+	if err == nil {
+		t.Error("RateLimitBaseline() with invalid schema should return an error")
+	}
+}
