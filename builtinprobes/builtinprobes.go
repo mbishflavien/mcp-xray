@@ -24,3 +24,11 @@ func SchemaFuzz() probe.ToolProbe {
 func AuthBypass() probe.ToolProbe {
 	return probes.NewAuthBypass()
 }
+
+// RateLimit returns the rate-limit probe: for every tool, it calls that
+// tool with the same benign arguments several times in a row and flags a
+// tool that crashes or hangs under that repeated load (High), or one that
+// shows no sign of being rate-limited at all (Low).
+func RateLimit() probe.ServerProbe {
+	return probes.NewRateLimit()
+}
