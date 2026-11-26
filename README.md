@@ -165,7 +165,7 @@ cmd/
   mcp-xray/          CLI entry point: flags -> scan.Runner -> report.Writer
   example-server/    minimal real MCP server, used to smoke-test the pipeline
   probes/            WASI probe sources (compiled by scripts/build-probes.sh):
-                     schemafuzz/ and authbypass/
+                     schemafuzz/, authbypass/, and ratelimit/
 
 findings/            public: Finding, Severity
 probe/               public: ToolCaller, Snapshot, Probe/ToolProbe/ServerProbe,
@@ -181,9 +181,15 @@ internal/
   safety/            KeywordPolicy, the default destructive-tool-name gate
   probeproto/        JSON wire types shared between the host and sandboxed probes
   probes/            embeds compiled probe .wasm, runs it through the sandbox,
-                     and adapts each into a probe.ToolProbe (schemafuzz_probe.go,
-                     authbypass_probe.go)
+                     and adapts each into a probe.ToolProbe/ServerProbe
+                     (schemafuzz_probe.go, authbypass_probe.go,
+                     ratelimit_probe.go)
+  probes/schemashape/ the schema-fill helpers schemafuzz/authbypass/ratelimit
+                     all share: parse a flat object schema, cap it, build a
+                     minimal valid-looking argument set
   probes/schemafuzz/ the schema-fuzz mutation generator (plain Go, natively testable)
   probes/authbypass/ the auth-bypass mutation generator (plain Go, natively testable)
+  probes/ratelimit/  the rate-limit probe's benign-baseline generator (plain
+                     Go, natively testable)
   sandbox/           runs a probe's .wasm as a sandboxed WASI module via wazero
 ```
