@@ -7,32 +7,12 @@ package authbypass
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"slices"
 	"strings"
 
 	"github.com/mbishflavien/mcp-xray/internal/probeproto"
+	"github.com/mbishflavien/mcp-xray/internal/probes/schemashape"
 )
-
-// objectSchema covers the subset of JSON Schema this probe understands: a
-// flat object with typed properties. Nested schemas, $ref, oneOf/anyOf, and
-// array item schemas are not resolved; properties using them are skipped
-// rather than guessed at - the same limitation internal/probes/schemafuzz
-// states for the same reason.
-type objectSchema struct {
-	Type       string                  `json:"type"`
-	Properties map[string]propertySpec `json:"properties"`
-}
-
-type propertySpec struct {
-	Type string `json:"type"`
-}
-
-// maxSchemaFields caps how many properties Generate will consider, for the
-// same reason internal/probes/schemafuzz caps its own fields: a malicious
-// or buggy MCP server could otherwise advertise an enormous schema to
-// inflate the scan's memory and call count.
-const maxSchemaFields = 200
 
 // category is one kind of authorization-shaped field this probe looks for.
 type category struct {
@@ -124,13 +104,13 @@ func matchCategory(propName string) *category {
 // only has something to say about a tool that looks like it carries an
 // authorization decision.
 func Generate(toolName string, schema json.RawMessage) ([]probeproto.Mutation, string) {
-	var s objectSchema
+	var s schemashape.ObjectSchema
 	if err := json.Unmarshal(schema, &s); err != nil {
 		return nil, fmt.Sprintf("parse schema: %v", err)
 	}
-	s = capSchema(s)
+	s = schemashape.Cap(s)
 
-	base := baseArgs(s)
+	base := schemashape.BaseArgs(s)
 	var mutations []probeproto.Mutation
 
 	for name, prop := range s.Properties {
@@ -142,7 +122,7 @@ func Generate(toolName string, schema json.RawMessage) ([]probeproto.Mutation, s
 		if !ok {
 			continue
 		}
-		args := cloneArgs(base)
+		args := schemashape.CloneArgs(base)
 		args[name] = value
 		mutations = append(mutations, probeproto.Mutation{
 			ID:          fmt.Sprintf("%s/%s/%s", toolName, strings.ReplaceAll(cat.kind, "_", "-"), name),
@@ -153,45 +133,4 @@ func Generate(toolName string, schema json.RawMessage) ([]probeproto.Mutation, s
 	}
 
 	return mutations, ""
-}
-
-// capSchema trims an oversized schema down to maxSchemaFields properties.
-// Map iteration order is unspecified, so which fields survive is arbitrary -
-// that's fine, this is a bound on scanner resource use, not a guarantee of
-// which fields get tested.
-func capSchema(s objectSchema) objectSchema {
-	if len(s.Properties) > maxSchemaFields {
-		trimmed := make(map[string]propertySpec, maxSchemaFields)
-		for name, prop := range s.Properties {
-			if len(trimmed) >= maxSchemaFields {
-				break
-			}
-			trimmed[name] = prop
-		}
-		s.Properties = trimmed
-	}
-	return s
-}
-
-// baseArgs builds a minimal valid-looking argument set so each mutation only
-// varies the one field it's testing.
-func baseArgs(s objectSchema) map[string]any {
-	args := make(map[string]any, len(s.Properties))
-	for name, prop := range s.Properties {
-		switch prop.Type {
-		case "string":
-			args[name] = "mcp-xray-probe"
-		case "number", "integer":
-			args[name] = 1
-		case "boolean":
-			args[name] = true
-		}
-	}
-	return args
-}
-
-func cloneArgs(src map[string]any) map[string]any {
-	dst := make(map[string]any, len(src))
-	maps.Copy(dst, src)
-	return dst
 }
