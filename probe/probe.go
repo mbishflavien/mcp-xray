@@ -44,7 +44,7 @@ type ToolContext struct {
 
 // ServerContext is what a ServerProbe runs with: the same gated caller and
 // snapshot, but no single target tool, for checks that span the server as
-// a whole (for example rate-limit probing).
+// a whole (for example rate-limit probing - see builtinprobes.RateLimit).
 type ServerContext struct {
 	Caller      ToolCaller
 	Snapshot    Snapshot
