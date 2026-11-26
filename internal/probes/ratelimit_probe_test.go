@@ -164,6 +164,41 @@ func TestRateLimitRunServerSkipsBlockedTool(t *testing.T) {
 	}
 }
 
+// TestRateLimitRunServerBlockedToolCostsExactlyOneCallRegardlessOfBurstSize
+// pins down a guarantee that matters for safety, not just efficiency: a
+// tool the safety policy blocks is never hammered BurstSize times just
+// because this probe doesn't know yet that it's blocked. A large
+// BurstSize makes the point sharply - if this ever regressed to calling
+// the real tool once per burst slot, this test would catch it even though
+// TestRateLimitRunServerSkipsBlockedTool (at the default BurstSize) might
+// not visibly differ by much.
+func TestRateLimitRunServerBlockedToolCostsExactlyOneCallRegardlessOfBurstSize(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			return nil, &probe.BlockedError{Tool: "greet", Reason: "test"}
+		},
+	}
+
+	p := NewRateLimit()
+	p.BurstSize = 100
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("CallTool was invoked %d times with BurstSize=100, want exactly 1", calls)
+	}
+	if len(out) != 1 || out[0].Kind != KindSkipped {
+		t.Errorf("findings = %+v, want exactly one %s", out, KindSkipped)
+	}
+}
+
 func TestRateLimitRunServerRejectedProducesNoFinding(t *testing.T) {
 	ctx := context.Background()
 	caller := &stubCaller{
