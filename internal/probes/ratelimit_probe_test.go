@@ -1,0 +1,190 @@
+package probes
+
+import (
+	"context"
+	"testing"
+
+	"github.com/mbishflavien/mcp-xray/findings"
+	"github.com/mbishflavien/mcp-xray/probe"
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+func TestRateLimitRunServerAllSucceedProducesNoFindingYet(t *testing.T) {
+	ctx := context.Background()
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{IsError: false}, nil
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0 (latency-growth detection isn't wired up yet)", len(out))
+	}
+}
+
+func TestRateLimitRunServerStopsOnCrash(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			if calls < 3 {
+				return &mcp.CallToolResult{IsError: false}, nil
+			}
+			return nil, mcp.ErrConnectionClosed
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("CallTool was invoked %d times, want exactly 3 (stop at the crash)", calls)
+	}
+	if len(out) != 1 {
+		t.Fatalf("got %d findings, want exactly 1", len(out))
+	}
+	if out[0].Kind != KindDoS || out[0].Severity != findings.High {
+		t.Errorf("finding = %+v, want High %s", out[0], KindDoS)
+	}
+}
+
+func TestRateLimitRunServerFirstCallCrashProducesNoFinding(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			return nil, mcp.ErrConnectionClosed
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("CallTool was invoked %d times, want exactly 1 (not attributable to the burst)", calls)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0: a tool already broken on the first call isn't a rate-limit finding", len(out))
+	}
+}
+
+func TestRateLimitRunServerSkipsBlockedTool(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			return nil, &probe.BlockedError{Tool: "greet", Reason: "test"}
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("CallTool was invoked %d times, want exactly 1 (don't waste the burst on an obviously-blocked tool)", calls)
+	}
+	if len(out) != 1 || out[0].Kind != KindSkipped || out[0].Severity != findings.Info {
+		t.Errorf("findings = %+v, want exactly one Info %s", out, KindSkipped)
+	}
+}
+
+func TestRateLimitRunServerRejectedProducesNoFinding(t *testing.T) {
+	ctx := context.Background()
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{IsError: true}, nil
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0: a rejected baseline call isn't a rate-limit finding either way", len(out))
+	}
+}
+
+func TestRateLimitRunServerInternalErrorReportedOnce(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			if calls == 1 {
+				return &mcp.CallToolResult{IsError: false}, nil
+			}
+			return nil, &jsonrpc.Error{Code: jsonrpc.CodeInternalError, Message: "internal error"}
+		},
+	}
+
+	p := NewRateLimit()
+	p.BurstSize = 4
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if calls != 4 {
+		t.Errorf("CallTool was invoked %d times, want exactly 4 (an internal error doesn't stop the burst)", calls)
+	}
+
+	var internalErrorFindings int
+	for _, f := range out {
+		if f.Kind == KindInternalError {
+			internalErrorFindings++
+		}
+	}
+	if internalErrorFindings != 1 {
+		t.Errorf("got %d %s findings, want exactly 1 (reported once, not once per occurrence)", internalErrorFindings, KindInternalError)
+	}
+}
+
+func TestRateLimitRunServerRespectsBurstSizeAndCallTimeout(t *testing.T) {
+	p := NewRateLimit()
+	if p.BurstSize != defaultBurstSize {
+		t.Errorf("default BurstSize = %d, want %d", p.BurstSize, defaultBurstSize)
+	}
+	if p.CallTimeout != defaultCallTimeout {
+		t.Errorf("default CallTimeout = %v, want %v", p.CallTimeout, defaultCallTimeout)
+	}
+}
+
+func TestRateLimitID(t *testing.T) {
+	if got := NewRateLimit().ID(); got != "rate-limit" {
+		t.Errorf("ID() = %q, want %q", got, "rate-limit")
+	}
+}
