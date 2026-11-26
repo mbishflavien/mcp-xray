@@ -103,7 +103,7 @@ func run(args []string) (int, error) {
 		policy.Allowlist[name] = true
 	}
 
-	runner := scan.NewRunner([]probe.Probe{builtinprobes.SchemaFuzz(), builtinprobes.AuthBypass()}, scan.Options{
+	runner := scan.NewRunner([]probe.Probe{builtinprobes.SchemaFuzz(), builtinprobes.AuthBypass(), builtinprobes.RateLimit()}, scan.Options{
 		CallTimeout: *timeout,
 		Policy:      policy,
 	})
