@@ -32,6 +32,31 @@ const (
 	// burst call was made, mirroring how schema-fuzz/auth-bypass surface
 	// the same thing.
 	KindSkipped = "rate_limit_skipped_unsafe"
+	// KindAbsent fires when an entire burst succeeds with no rejection and
+	// no meaningful growth in latency: nothing suggests this tool is
+	// rate-limited at all. A missing-control finding, not a bug.
+	KindAbsent = "rate_limit_absent"
+)
+
+// Thresholds for the latency-growth heuristic noThrottleSignal uses when a
+// burst never gets rejected outright. Deliberately crude and documented as
+// such: a server whose real rate limit only kicks in past burst calls, or
+// one that just happens to slow down for an unrelated reason (a GC pause,
+// disk I/O), can fool this in either direction. It exists to catch a
+// softer signal than an outright rejection - a server quietly throttling by
+// delaying responses - without pretending to be a real statistical test.
+const (
+	// minLatencySamples is the fewest successful calls needed before the
+	// heuristic says anything at all; below this, there's too little data
+	// to call a difference meaningful one way or the other.
+	minLatencySamples = 4
+	// latencyGrowthFactor is how much slower the burst's second half has
+	// to be, on average, than its first half.
+	latencyGrowthFactor = 2.0
+	// minLatencyGrowthAbs is the minimum absolute growth required on top
+	// of latencyGrowthFactor, so two calls that both took near-zero time
+	// (say, 1ms and 3ms) don't count as "3x slower".
+	minLatencyGrowthAbs = 50 * time.Millisecond
 )
 
 // RateLimit is a probe.ServerProbe: for every tool the server advertises,
@@ -96,11 +121,14 @@ func (p *RateLimit) RunServer(ctx context.Context, sc probe.ServerContext) ([]fi
 // already surface a blocked tool.
 func (p *RateLimit) burstTool(ctx context.Context, caller probe.ToolCaller, toolName string, args map[string]any, burst int, timeout time.Duration) []findings.Finding {
 	var out []findings.Finding
+	var durations []time.Duration
 	reportedInternalError := false
 
 	for i := range burst {
 		callCtx, cancel := context.WithTimeout(ctx, timeout)
+		start := time.Now()
 		result, callErr := caller.CallTool(callCtx, toolName, args)
+		elapsed := time.Since(start)
 		cancel()
 
 		outcome := probe.Classify(result, callErr)
@@ -153,6 +181,51 @@ func (p *RateLimit) burstTool(ctx context.Context, caller probe.ToolCaller, tool
 			// report.
 			return out
 		}
+		durations = append(durations, elapsed)
+	}
+
+	if len(out) == 0 && noThrottleSignal(durations) {
+		out = append(out, findings.Finding{
+			ProbeID:  p.ID(),
+			Severity: findings.Low,
+			Kind:     KindAbsent,
+			Title:    fmt.Sprintf("%s: no rate limiting observed", KindAbsent),
+			Detail:   fmt.Sprintf("%d identical calls all succeeded with no sign of throttling: no rejection, and no meaningful growth in latency", len(durations)),
+			Target:   toolName,
+			Evidence: summarizeDurations(durations),
+		})
 	}
 	return out
+}
+
+// noThrottleSignal reports whether a completed, all-successful burst showed
+// no sign the server treats repeated calls any differently from a single
+// one. See the threshold constants above for its documented limitations.
+func noThrottleSignal(d []time.Duration) bool {
+	if len(d) < minLatencySamples {
+		return true
+	}
+	mid := len(d) / 2
+	firstAvg := averageDuration(d[:mid])
+	secondAvg := averageDuration(d[mid:])
+	grew := secondAvg >= time.Duration(float64(firstAvg)*latencyGrowthFactor) && secondAvg-firstAvg >= minLatencyGrowthAbs
+	return !grew
+}
+
+func averageDuration(d []time.Duration) time.Duration {
+	var total time.Duration
+	for _, v := range d {
+		total += v
+	}
+	return total / time.Duration(len(d))
+}
+
+// summarizeDurations gives the Absent finding's Evidence something
+// concrete to show instead of leaving it empty, since there's no error
+// text to report.
+func summarizeDurations(d []time.Duration) string {
+	if len(d) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d calls succeeded; first took %v, last took %v", len(d), d[0], d[len(d)-1])
 }

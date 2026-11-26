@@ -3,6 +3,7 @@ package probes
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/mbishflavien/mcp-xray/findings"
 	"github.com/mbishflavien/mcp-xray/probe"
@@ -10,7 +11,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestRateLimitRunServerAllSucceedProducesNoFindingYet(t *testing.T) {
+func TestRateLimitRunServerNoThrottleSignalFindsAbsent(t *testing.T) {
 	ctx := context.Background()
 	caller := &stubCaller{
 		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
@@ -26,8 +27,56 @@ func TestRateLimitRunServerAllSucceedProducesNoFindingYet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunServer() error: %v", err)
 	}
+	if len(out) != 1 || out[0].Kind != KindAbsent || out[0].Severity != findings.Low {
+		t.Errorf("findings = %+v, want exactly one Low %s", out, KindAbsent)
+	}
+}
+
+func TestRateLimitRunServerLatencyGrowthSuppressesAbsentFinding(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			if calls > 2 {
+				time.Sleep(80 * time.Millisecond)
+			}
+			return &mcp.CallToolResult{IsError: false}, nil
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
 	if len(out) != 0 {
-		t.Errorf("got %d findings, want 0 (latency-growth detection isn't wired up yet)", len(out))
+		t.Errorf("got %d findings, want 0: growing latency is itself a (soft) throttling signal", len(out))
+	}
+}
+
+func TestRateLimitRunServerTooFewSamplesStillFindsAbsent(t *testing.T) {
+	ctx := context.Background()
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{IsError: false}, nil
+		},
+	}
+
+	p := NewRateLimit()
+	p.BurstSize = 2 // below minLatencySamples: too little data either way
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if len(out) != 1 || out[0].Kind != KindAbsent {
+		t.Errorf("findings = %+v, want exactly one %s (not enough samples to detect degradation, so no signal is assumed)", out, KindAbsent)
 	}
 }
 
