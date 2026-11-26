@@ -128,6 +128,17 @@ pass found and fixed several gaps in that:
   `crypto/tls`, `crypto/x509`, `net/url`, `net/textproto`,
   `encoding/asn1`). Upgraded to go1.26.11; `govulncheck ./...` now
   reports none.
+- The rate-limit probe multiplies calls by a burst factor - the one
+  resource-use risk it introduces that schema-fuzz/auth-bypass don't
+  have - so `BurstSize x toolCount x CallTimeout` could otherwise stack
+  up unbounded on a server with many slow or hanging tools. `RunServer`
+  now tracks its own wall-clock time and stops starting any *new* tool's
+  burst past a ceiling (`MaxDuration`, 2 minutes by default); a burst
+  already in progress still finishes.
+- That same probe's burst loop now checks for cancellation between
+  calls, so canceling a scan (Ctrl-C) stops a burst immediately instead
+  of grinding through its remaining calls - and a cancellation never
+  gets misreported as a rate-limit finding.
 
 ## Getting started
 
