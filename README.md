@@ -36,16 +36,22 @@ scored Finding. Verified against a real MCP server (`cmd/example-server`),
 including a mutation that genuinely crashes the target process and one that
 genuinely hangs past the per-call timeout.
 
-Known limitation: if one mutation crashes a tool, mcp-xray doesn't reconnect.
-The scan stops retrying further mutations against *that* tool once it
-crashes, but the next tool's first call can still surface one "crash"
-finding of its own - that's fallout from the connection already being dead,
-not an independently discovered bug in that tool. Treat the *first* crash
-finding in a report as the real one. (Tools are listed alphabetically
-regardless of registration order, so in `example-server`, `process`'s
-crash always lands before `slow_echo` is probed - confirmed by disabling
-`process`'s panic and re-running, which shows `slow_echo` genuinely timing
-out on its own.)
+Known limitation: if one probe crashes a tool, mcp-xray doesn't reconnect.
+The scan stops retrying further calls against *that* tool once it crashes,
+but every remaining tool's (and every remaining probe's) first call can
+still surface one "crash" finding of its own for the rest of the whole
+scan - that's fallout from the connection already being dead, not an
+independently discovered bug. Treat the *first* crash finding in a report
+as the real one. (Tools are listed alphabetically regardless of
+registration order, so in `example-server`, `leaky_counter` crashes first,
+under the rate-limit probe's own burst, and poisons every tool and probe
+after it - confirmed by disabling its panic and re-running, which lets
+rate-limit finish cleanly against every tool and lets schema-fuzz's own
+null-byte mutation against `process` become the scan's first crash
+instead, exactly as it was before the rate-limit probe existed. Either
+way, `slow_echo` and `throttled_echo` end up inheriting whichever crash
+happened first, rather than showing their own genuine timeout or rejection
+- the same fallout, just with a different, alphabetically-earlier trigger.)
 
 The auth-bypass probe (`internal/probes/authbypass`) finds candidate fields
 by name (`account_id`, `role`, `token`, and similar) rather than by any real
@@ -59,6 +65,31 @@ Verified against `get_account` in `cmd/example-server`, a tool that returns
 account data for whatever `account_id` and `role` it's given with no check
 at all - both a High `auth_bypass_identity` and a High `auth_bypass_privilege`
 finding fire against it.
+
+The rate-limit probe (`internal/probes/ratelimit`, a `probe.ServerProbe`
+rather than a `probe.ToolProbe`) calls every tool with the same benign,
+valid-looking arguments several times in a row and never attributes the
+*first* call's outcome to the burst: a tool that's already broken,
+already rejects, or is already blocked on one valid call isn't a
+rate-limiting finding - schema-fuzz and auth-bypass already cover "this
+tool is broken" on their own terms. Its "no rate limiting observed"
+finding relies on a deliberately crude latency-growth heuristic (comparing
+the burst's first half against its second), documented as such in
+`ratelimit_probe.go`'s own threshold constants: a server whose real limit
+only kicks in past the burst size, or one that just happens to slow down
+for an unrelated reason, can fool it either way. `cmd/mcp-xray` runs it
+*before* schema-fuzz/auth-bypass specifically so its burst (and the
+latency it measures) lands on a still-fresh connection rather than one
+already hammered by adversarial payloads. Verified against
+`cmd/example-server`: `get_account` and `greet` (no rate limiting at all)
+each flag Low `rate_limit_absent`; `leaky_counter` (crashes on its 4th
+call, simulating unbounded resource use under load) flags High
+`rate_limit_dos`; `delete_all_records` flags Info `rate_limit_skipped_unsafe`,
+same as the other two probes; and `throttled_echo` (a well-behaved tool
+that rejects calls past its 3rd) produces no finding at all, confirmed by
+a dedicated unit test since `leaky_counter`'s crash - alphabetically
+earlier - ends the live connection before the probe's own loop reaches it
+in a default run.
 
 Still missing: a prompt-injection-in-output probe; the live terminal
 dashboard; an HTTP/Streamable transport; and caching the compiled WASI
