@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	"github.com/mbishflavien/mcp-xray/internal/probes/schemashape"
 )
 
 func kindsFor(t *testing.T, toolName string, schema string) map[string]any {
@@ -166,9 +168,9 @@ func TestGenerateCapsAnAdversarialSchema(t *testing.T) {
 	if errMsg != "" {
 		t.Fatalf("Generate() error: %s", errMsg)
 	}
-	if len(mutations) > maxSchemaFields {
+	if len(mutations) > schemashape.MaxFields {
 		t.Errorf("Generate() produced %d mutations from %d properties, want at most %d",
-			len(mutations), propertyCount, maxSchemaFields)
+			len(mutations), propertyCount, schemashape.MaxFields)
 	}
 }
 
