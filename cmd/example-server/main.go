@@ -34,6 +34,10 @@ type getAccountArgs struct {
 	Role      string `json:"role" jsonschema:"the caller's role"`
 }
 
+type leakyCounterArgs struct {
+	Note string `json:"note" jsonschema:"anything, unused"`
+}
+
 func main() {
 	server := mcp.NewServer(&mcp.Implementation{Name: "example-server", Version: "0.1.0"}, nil)
 
@@ -69,6 +73,23 @@ func main() {
 				Content: []mcp.Content{&mcp.TextContent{
 					Text: fmt.Sprintf("account %s (role=%s): balance $100,000", args.AccountID, args.Role),
 				}},
+			}, nil, nil
+		})
+
+	// leaky_counter is deliberately vulnerable: it has no rate limiting
+	// at all and leaks a little unbounded state on every call, crashing
+	// once that state passes a threshold - a stand-in for a real
+	// resource-exhaustion bug that only shows up under repeated load,
+	// exactly what the rate-limit probe's burst exists to surface.
+	var leakyCounterCalls int
+	mcp.AddTool(server, &mcp.Tool{Name: "leaky_counter", Description: "count something, poorly"},
+		func(_ context.Context, _ *mcp.CallToolRequest, _ leakyCounterArgs) (*mcp.CallToolResult, any, error) {
+			leakyCounterCalls++
+			if leakyCounterCalls > 3 {
+				panic("leaky_counter: too many calls, simulated resource exhaustion")
+			}
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("count=%d", leakyCounterCalls)}},
 			}, nil, nil
 		})
 
