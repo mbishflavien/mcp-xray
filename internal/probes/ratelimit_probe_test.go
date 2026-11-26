@@ -2,6 +2,8 @@ package probes
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,6 +341,42 @@ func TestRateLimitRunServerStopsImmediatelyOnContextCancellation(t *testing.T) {
 	}
 	if len(out) != 0 {
 		t.Errorf("got %d findings, want 0: a scan cancellation isn't a rate-limit finding", len(out))
+	}
+}
+
+// TestRateLimitRunServerCapsEvidenceLengthOnDoSFinding confirms a tool
+// that fails with an oversized error message (the same kind of thing a
+// struggling, resource-exhausted process might emit) doesn't make the
+// resulting Finding's Evidence grow without bound - the same cap every
+// other probe's findings already get via evidenceFor/truncate, reused
+// here rather than reimplemented.
+func TestRateLimitRunServerCapsEvidenceLengthOnDoSFinding(t *testing.T) {
+	ctx := context.Background()
+	huge := strings.Repeat("A", 1_000_000)
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			if calls == 1 {
+				return &mcp.CallToolResult{IsError: false}, nil
+			}
+			return nil, errors.New(huge)
+		},
+	}
+
+	p := NewRateLimit()
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: []*mcp.Tool{greetTool()}},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+	if len(out) != 1 || out[0].Kind != KindDoS {
+		t.Fatalf("findings = %+v, want exactly one %s", out, KindDoS)
+	}
+	if len(out[0].Evidence) > maxEvidenceLen+100 { // +100 for the truncation note itself
+		t.Errorf("Evidence is %d bytes, want capped near %d", len(out[0].Evidence), maxEvidenceLen)
 	}
 }
 
