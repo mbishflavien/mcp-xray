@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+
+	"github.com/mbishflavien/mcp-xray/internal/probes/schemashape"
 )
 
 func kindCounts(t *testing.T, toolName string, schema string) map[string]int {
@@ -51,7 +53,7 @@ func TestGenerateCapsAnAdversarialSchema(t *testing.T) {
 	// mutations, plus one missing_required entry, plus one
 	// mass-assignment mutation overall - nowhere near
 	// propertyCount * (len(stringMutationTable) + 1).
-	maxExpected := maxSchemaFields*(len(stringMutationTable)+1) + 1
+	maxExpected := schemashape.MaxFields*(len(stringMutationTable)+1) + 1
 	if len(mutations) > maxExpected {
 		t.Errorf("Generate() produced %d mutations from %d properties, want at most %d",
 			len(mutations), propertyCount, maxExpected)
