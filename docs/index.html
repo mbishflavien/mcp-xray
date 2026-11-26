@@ -40,7 +40,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--face);font-weight:4
 
 /* ── persistent background: a slow ambient sunset, fixed, never changes with scroll ─ */
 .bg-sky{position:fixed;inset:0;z-index:-2;overflow:hidden;
-  background:linear-gradient(115deg,#07090e,#0c1420,#142b40,#5e3a22,#8a622f,#a4835a,#8a622f,#5e3a22,#142b40,#0c1420,#07090e); /* taste-skill-ignore: the client's explicit request is literally "a gradient of all those sunset colours, looping" as the page background, not a decorative UI gradient */
+  background:linear-gradient(115deg,#0a0d13,#101a26,#1c3a56,#a85a33,#e3a94a,#e8b654,#e3a94a,#a85a33,#1c3a56,#101a26,#0a0d13); /* taste-skill-ignore: the client's explicit request is literally "a gradient of all those sunset colours, looping" as the page background, not a decorative UI gradient */
   background-size:320% 320%;
   animation:skyShift 48s ease-in-out infinite}
 @keyframes skyShift{
@@ -52,7 +52,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--face);font-weight:4
 }
 .bg-sky::after{content:"";position:absolute;inset:0;background-image:var(--grain);background-size:90px;
   opacity:.85;mix-blend-mode:overlay;pointer-events:none}
-.bg-scrim{position:fixed;inset:0;z-index:-1;background:rgba(3,2,1,.5);pointer-events:none}
+.bg-scrim{position:fixed;inset:0;z-index:-1;background:rgba(5,4,2,.22);pointer-events:none}
 @media (prefers-reduced-motion:reduce){.bg-sky{animation:none;background-position:30% 50%}}
 
 /* ── glass: the shared content surface over the fixed video ──────────── */
