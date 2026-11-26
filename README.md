@@ -13,15 +13,19 @@ Point it at an MCP server over stdio and it:
   tool's schema shaped like an identity, a role, or a credential gets a
   forged value (someone else's id, `role: "admin"`, a blank token), and a
   silently-accepted bypass attempt is flagged High.
+- Bursts every tool with the same benign, valid-looking arguments several
+  times in a row: a tool that crashes or hangs under that repeated load is
+  flagged High, and one that shows no sign of being rate-limited at all
+  (no rejection, no growing latency) is flagged Low as a missing control.
 - Gates every call through a destructive-tool-name safety policy first, so a
   probe can't actually invoke something like `delete_all_records` without an
   explicit `--allow-tool` opt-in.
 - Scores the outcome by severity and reports it as text, JSON, or SARIF
   (`--format`), with `--fail-on <severity>` for CI gating.
 
-Still missing, planned next: rate-limit probing, prompt-injection-in-output
-detection, an HTTP/Streamable transport (stdio only for now), and a live
-terminal dashboard.
+Still missing, planned next: prompt-injection-in-output detection, an
+HTTP/Streamable transport (stdio only for now), and a live terminal
+dashboard.
 
 ## Status
 
@@ -56,10 +60,10 @@ account data for whatever `account_id` and `role` it's given with no check
 at all - both a High `auth_bypass_identity` and a High `auth_bypass_privilege`
 finding fire against it.
 
-Still missing: rate-limit and prompt-injection-in-output probes; the live
-terminal dashboard; an HTTP/Streamable transport; and caching the compiled
-WASI module across probe runs (every sandboxed call currently recompiles
-it, which is correct but slow).
+Still missing: a prompt-injection-in-output probe; the live terminal
+dashboard; an HTTP/Streamable transport; and caching the compiled WASI
+module across probe runs (every sandboxed call currently recompiles it,
+which is correct but slow).
 
 ### Hardening against the server it's scanning
 
