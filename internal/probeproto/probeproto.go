@@ -6,8 +6,10 @@ package probeproto
 
 import "encoding/json"
 
-// SchemaFuzzInput is what the host sends a schema-fuzz probe on stdin.
-type SchemaFuzzInput struct {
+// MutationRequest is what the host sends a mutation-generating probe (for
+// example schema-fuzz or auth-bypass) on stdin: the one tool's name and its
+// input schema.
+type MutationRequest struct {
 	ToolName string          `json:"toolName"`
 	Schema   json.RawMessage `json:"schema"`
 }
@@ -22,8 +24,8 @@ type Mutation struct {
 	Args        map[string]any `json:"args"`
 }
 
-// SchemaFuzzOutput is what a schema-fuzz probe writes to stdout.
-type SchemaFuzzOutput struct {
+// MutationResponse is what a mutation-generating probe writes to stdout.
+type MutationResponse struct {
 	Mutations []Mutation `json:"mutations"`
 	Error     string     `json:"error,omitempty"`
 }

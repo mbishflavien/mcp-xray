@@ -16,3 +16,11 @@ import (
 func SchemaFuzz() probe.ToolProbe {
 	return probes.NewSchemaFuzz()
 }
+
+// AuthBypass returns the auth-bypass probe: for each tool whose input
+// schema has a field shaped like an identity, a privilege, or a credential,
+// it calls the tool with a forged value for that field (sandboxed as a WASI
+// module to generate it) and flags the ones that get silently accepted.
+func AuthBypass() probe.ToolProbe {
+	return probes.NewAuthBypass()
+}

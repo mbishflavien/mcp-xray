@@ -9,15 +9,19 @@ Point it at an MCP server over stdio and it:
   confusion, oversized strings, path traversal, null bytes, SQL/shell/template
   injection strings, mass assignment, missing required fields), actually
   calls the tool with each one, and classifies the real result.
+- Looks for broken object/function-level authorization: any field in a
+  tool's schema shaped like an identity, a role, or a credential gets a
+  forged value (someone else's id, `role: "admin"`, a blank token), and a
+  silently-accepted bypass attempt is flagged High.
 - Gates every call through a destructive-tool-name safety policy first, so a
   probe can't actually invoke something like `delete_all_records` without an
   explicit `--allow-tool` opt-in.
 - Scores the outcome by severity and reports it as text, JSON, or SARIF
   (`--format`), with `--fail-on <severity>` for CI gating.
 
-Still missing, planned next: auth-bypass checks, rate-limit probing,
-prompt-injection-in-output detection, an HTTP/Streamable transport (stdio
-only for now), and a live terminal dashboard.
+Still missing, planned next: rate-limit probing, prompt-injection-in-output
+detection, an HTTP/Streamable transport (stdio only for now), and a live
+terminal dashboard.
 
 ## Status
 
@@ -39,10 +43,23 @@ crash always lands before `slow_echo` is probed - confirmed by disabling
 `process`'s panic and re-running, which shows `slow_echo` genuinely timing
 out on its own.)
 
-Still missing: auth-bypass, rate-limit, and prompt-injection-in-output
-probes; the live terminal dashboard; an HTTP/Streamable transport; and
-caching the compiled WASI module across probe runs (every sandboxed call
-currently recompiles it, which is correct but slow).
+The auth-bypass probe (`internal/probes/authbypass`) finds candidate fields
+by name (`account_id`, `role`, `token`, and similar) rather than by any real
+understanding of a tool's authorization model, so it can both miss a real
+bypass hiding behind an oddly-named field and flag a field that only looks
+identity-shaped. There's also no real credential to strip yet, since
+HTTP/Streamable transport (where a bearer token would actually live) doesn't
+exist - it tests the one thing that's testable against a stdio tool server
+today: whether an implausible argument value is honored instead of rejected.
+Verified against `get_account` in `cmd/example-server`, a tool that returns
+account data for whatever `account_id` and `role` it's given with no check
+at all - both a High `auth_bypass_identity` and a High `auth_bypass_privilege`
+finding fire against it.
+
+Still missing: rate-limit and prompt-injection-in-output probes; the live
+terminal dashboard; an HTTP/Streamable transport; and caching the compiled
+WASI module across probe runs (every sandboxed call currently recompiles
+it, which is correct but slow).
 
 ### Hardening against the server it's scanning
 
@@ -112,7 +129,8 @@ outside it from the start.
 cmd/
   mcp-xray/          CLI entry point: flags -> scan.Runner -> report.Writer
   example-server/    minimal real MCP server, used to smoke-test the pipeline
-  probes/            WASI probe sources (compiled by scripts/build-probes.sh)
+  probes/            WASI probe sources (compiled by scripts/build-probes.sh):
+                     schemafuzz/ and authbypass/
 
 findings/            public: Finding, Severity
 probe/               public: ToolCaller, Snapshot, Probe/ToolProbe/ServerProbe,
@@ -128,7 +146,9 @@ internal/
   safety/            KeywordPolicy, the default destructive-tool-name gate
   probeproto/        JSON wire types shared between the host and sandboxed probes
   probes/            embeds compiled probe .wasm, runs it through the sandbox,
-                     and adapts it into a probe.ToolProbe
+                     and adapts each into a probe.ToolProbe (schemafuzz_probe.go,
+                     authbypass_probe.go)
   probes/schemafuzz/ the schema-fuzz mutation generator (plain Go, natively testable)
+  probes/authbypass/ the auth-bypass mutation generator (plain Go, natively testable)
   sandbox/           runs a probe's .wasm as a sandboxed WASI module via wazero
 ```

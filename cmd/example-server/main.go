@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -28,6 +29,11 @@ type deleteAllRecordsArgs struct {
 	Table string `json:"table" jsonschema:"the table to delete every record from"`
 }
 
+type getAccountArgs struct {
+	AccountID string `json:"account_id" jsonschema:"the account to fetch"`
+	Role      string `json:"role" jsonschema:"the caller's role"`
+}
+
 func main() {
 	server := mcp.NewServer(&mcp.Implementation{Name: "example-server", Version: "0.1.0"}, nil)
 
@@ -49,6 +55,20 @@ func main() {
 			}
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: args.Text}},
+			}, nil, nil
+		})
+
+	// get_account is deliberately vulnerable: it returns account data for
+	// whatever account_id is given and honors whatever role is claimed,
+	// with no real check at all - a broken object/function-level
+	// authorization bug, exactly what the auth-bypass probe exists to
+	// catch.
+	mcp.AddTool(server, &mcp.Tool{Name: "get_account", Description: "fetch an account's balance"},
+		func(_ context.Context, _ *mcp.CallToolRequest, args getAccountArgs) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.TextContent{
+					Text: fmt.Sprintf("account %s (role=%s): balance $100,000", args.AccountID, args.Role),
+				}},
 			}, nil, nil
 		})
 

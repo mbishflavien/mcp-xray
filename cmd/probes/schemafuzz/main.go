@@ -1,7 +1,7 @@
 // Command schemafuzz is compiled to a WASI module (GOOS=wasm GOARCH=wasip1)
 // and run sandboxed by the host via wazero. It never touches the network or
-// filesystem: it reads a probeproto.SchemaFuzzInput on stdin and writes a
-// probeproto.SchemaFuzzOutput to stdout.
+// filesystem: it reads a probeproto.MutationRequest on stdin and writes a
+// probeproto.MutationResponse to stdout.
 package main
 
 import (
@@ -16,21 +16,21 @@ import (
 func main() {
 	in, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		writeOutput(probeproto.SchemaFuzzOutput{Error: "read stdin: " + err.Error()})
+		writeOutput(probeproto.MutationResponse{Error: "read stdin: " + err.Error()})
 		return
 	}
 
-	var input probeproto.SchemaFuzzInput
+	var input probeproto.MutationRequest
 	if err := json.Unmarshal(in, &input); err != nil {
-		writeOutput(probeproto.SchemaFuzzOutput{Error: "parse input: " + err.Error()})
+		writeOutput(probeproto.MutationResponse{Error: "parse input: " + err.Error()})
 		return
 	}
 
 	mutations, errMsg := schemafuzz.Generate(input.ToolName, input.Schema)
-	writeOutput(probeproto.SchemaFuzzOutput{Mutations: mutations, Error: errMsg})
+	writeOutput(probeproto.MutationResponse{Mutations: mutations, Error: errMsg})
 }
 
-func writeOutput(out probeproto.SchemaFuzzOutput) {
+func writeOutput(out probeproto.MutationResponse) {
 	enc := json.NewEncoder(os.Stdout)
 	_ = enc.Encode(out)
 }

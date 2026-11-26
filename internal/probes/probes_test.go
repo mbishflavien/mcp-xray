@@ -45,3 +45,41 @@ func TestSchemaFuzzMutationsInvalidSchema(t *testing.T) {
 		t.Error("SchemaFuzzMutations() with invalid schema should return an error")
 	}
 }
+
+func TestAuthBypassMutationsEndToEnd(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	schema := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"account_id": {"type": "string"},
+			"role": {"type": "string"}
+		}
+	}`)
+
+	mutations, err := AuthBypassMutations(ctx, "get_account", schema)
+	if err != nil {
+		t.Fatalf("AuthBypassMutations() error: %v", err)
+	}
+
+	kinds := make(map[string]bool)
+	for _, m := range mutations {
+		kinds[m.Kind] = true
+	}
+	for _, want := range []string{"auth_bypass_identity", "auth_bypass_privilege"} {
+		if !kinds[want] {
+			t.Errorf("mutations missing kind %q; got %v", want, mutations)
+		}
+	}
+}
+
+func TestAuthBypassMutationsInvalidSchema(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := AuthBypassMutations(ctx, "get_account", json.RawMessage(`not json`))
+	if err == nil {
+		t.Error("AuthBypassMutations() with invalid schema should return an error")
+	}
+}
