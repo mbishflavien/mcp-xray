@@ -230,6 +230,48 @@ func TestRateLimitRunServerRespectsBurstSizeAndCallTimeout(t *testing.T) {
 	if p.CallTimeout != defaultCallTimeout {
 		t.Errorf("default CallTimeout = %v, want %v", p.CallTimeout, defaultCallTimeout)
 	}
+	if p.MaxDuration != defaultMaxDuration {
+		t.Errorf("default MaxDuration = %v, want %v", p.MaxDuration, defaultMaxDuration)
+	}
+}
+
+// TestRateLimitRunServerStopsStartingNewToolsPastMaxDuration confirms the
+// whole-probe wall-clock ceiling actually bounds how many tools get a
+// burst, rather than just existing as an unused field. A burst already in
+// progress still finishes - only *starting the next tool* is what gets
+// skipped.
+func TestRateLimitRunServerStopsStartingNewToolsPastMaxDuration(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			calls++
+			time.Sleep(20 * time.Millisecond)
+			return &mcp.CallToolResult{IsError: false}, nil
+		},
+	}
+
+	p := NewRateLimit()
+	p.MaxDuration = 10 * time.Millisecond // tiny: the first tool's burst alone exceeds it
+	tools := []*mcp.Tool{greetTool(), greetTool(), greetTool()}
+	tools[1].Name, tools[2].Name = "tool-two", "tool-three"
+
+	out, err := p.RunServer(ctx, probe.ServerContext{
+		Caller:   caller,
+		Snapshot: probe.Snapshot{Tools: tools},
+	})
+	if err != nil {
+		t.Fatalf("RunServer() error: %v", err)
+	}
+
+	// The first tool's burst (BurstSize calls) still runs to completion -
+	// only the ceiling-check *before starting the next tool* stops it.
+	if calls != p.BurstSize {
+		t.Errorf("CallTool was invoked %d times, want exactly %d (one tool's whole burst, no more)", calls, p.BurstSize)
+	}
+	if len(out) != 1 {
+		t.Errorf("got %d findings, want exactly 1 (only the first tool was ever probed)", len(out))
+	}
 }
 
 func TestRateLimitID(t *testing.T) {

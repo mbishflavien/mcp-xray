@@ -18,6 +18,13 @@ import (
 // than how many tools get probed.
 const defaultBurstSize = 5
 
+// defaultMaxDuration bounds the whole probe's wall-clock time across every
+// tool, not just one tool's burst. BurstSize x toolCount x CallTimeout can
+// stack up on a server with many slow or hanging tools - this is the one
+// resource-use risk rate-limit introduces that schema-fuzz/auth-bypass
+// don't have, since neither of them multiplies calls by a burst factor.
+const defaultMaxDuration = 2 * time.Minute
+
 // Kind values this probe reports. All four are reportable; which fires
 // depends on how a burst of identical calls against one tool behaves.
 const (
@@ -71,11 +78,16 @@ type RateLimit struct {
 	CallTimeout time.Duration
 	// BurstSize is how many identical calls to make per tool.
 	BurstSize int
+	// MaxDuration bounds how long RunServer spends on the whole server,
+	// across every tool. Once exceeded, no *new* tool's burst is started -
+	// a burst already in progress still finishes - and RunServer returns
+	// whatever it found so far instead of working through every tool.
+	MaxDuration time.Duration
 }
 
 // NewRateLimit returns a RateLimit probe with sensible defaults.
 func NewRateLimit() *RateLimit {
-	return &RateLimit{CallTimeout: defaultCallTimeout, BurstSize: defaultBurstSize}
+	return &RateLimit{CallTimeout: defaultCallTimeout, BurstSize: defaultBurstSize, MaxDuration: defaultMaxDuration}
 }
 
 // ID implements probe.Probe.
@@ -91,10 +103,18 @@ func (p *RateLimit) RunServer(ctx context.Context, sc probe.ServerContext) ([]fi
 	if burst <= 0 {
 		burst = defaultBurstSize
 	}
+	maxDuration := p.MaxDuration
+	if maxDuration <= 0 {
+		maxDuration = defaultMaxDuration
+	}
 
+	start := time.Now()
 	var out []findings.Finding
 	var errs []error
 	for _, tool := range sc.Snapshot.Tools {
+		if time.Since(start) > maxDuration {
+			break
+		}
 		schema, err := json.Marshal(tool.InputSchema)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("marshal input schema for %q: %w", tool.Name, err))
