@@ -104,6 +104,25 @@ func TestSchemaFuzzRunToolCapsEvidenceLength(t *testing.T) {
 	}
 }
 
+func TestTextContentJoinsEveryBlock(t *testing.T) {
+	result := &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "first block"},
+			&mcp.TextContent{Text: "second block"},
+		},
+	}
+	got := textContent(result)
+	if !strings.Contains(got, "first block") || !strings.Contains(got, "second block") {
+		t.Errorf("textContent() = %q, want both blocks present", got)
+	}
+}
+
+func TestTextContentNilResult(t *testing.T) {
+	if got := textContent(nil); got != "" {
+		t.Errorf("textContent(nil) = %q, want empty", got)
+	}
+}
+
 func TestTruncate(t *testing.T) {
 	if got := truncate("short", 100); got != "short" {
 		t.Errorf("truncate() of a short string changed it: %q", got)

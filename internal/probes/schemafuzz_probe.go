@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -119,4 +120,22 @@ func truncate(s string, maxLen int) string {
 		cut = cut[:len(cut)-1]
 	}
 	return fmt.Sprintf("%s ... (truncated, %d bytes total)", cut, len(s))
+}
+
+// textContent joins every text content block in a tool's result, in
+// order, separated by newlines. Unlike evidenceFor (which only needs the
+// first block as a representative sample), the prompt-injection probe
+// needs every block: an injected payload could be hiding in any of them,
+// not just the first.
+func textContent(result *mcp.CallToolResult) string {
+	if result == nil {
+		return ""
+	}
+	var parts []string
+	for _, c := range result.Content {
+		if text, ok := c.(*mcp.TextContent); ok {
+			parts = append(parts, text.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
 }
