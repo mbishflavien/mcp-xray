@@ -14,7 +14,11 @@
 // this codebase.
 package promptinjection
 
-import "strings"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // maxScanLen caps how many bytes of a tool's response text Detect will
 // scan. A malicious or buggy MCP server could otherwise return an
@@ -152,4 +156,33 @@ func indexOfURL(lower string) int {
 		return idx
 	}
 	return strings.Index(lower, "https://")
+}
+
+// KindHiddenContent fires on zero-width/invisible Unicode characters -
+// commonly used to hide text from a human reviewer while an LLM would
+// still parse it. U+FEFF (a byte-order mark) is deliberately excluded:
+// it's a common, benign thing to find at the start of real text, unlike
+// the characters below, which have essentially no legitimate reason to
+// appear in a tool's response at all.
+const KindHiddenContent = "prompt_injection_hidden_content"
+
+var hiddenContentRunes = []rune{
+	'​', // zero width space
+	'‌', // zero width non-joiner
+	'‍', // zero width joiner
+	'⁠', // word joiner
+}
+
+// detectHiddenContent takes the original-case text (not lowercased: case
+// is meaningless for these code points) and ranges over its runes - safe
+// even if capForScan cut text mid-rune, since Go's range-over-string
+// yields utf8.RuneError for a truncated trailing rune rather than
+// panicking.
+func detectHiddenContent(text string) *Match {
+	for idx, r := range text {
+		if slices.Contains(hiddenContentRunes, r) {
+			return &Match{Kind: KindHiddenContent, Snippet: fmt.Sprintf("U+%04X", r), Index: idx}
+		}
+	}
+	return nil
 }
