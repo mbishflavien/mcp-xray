@@ -197,6 +197,29 @@ func TestPromptInjectionRunToolBlockedProducesNoFinding(t *testing.T) {
 	}
 }
 
+// TestPromptInjectionRunToolTimeoutProducesNoFinding pins down the one
+// non-success outcome the earlier skeleton commit didn't test directly
+// (it covered rejected, crashed, errored internally, and blocked, but
+// not a hang specifically) - so a future change can't regress it
+// silently.
+func TestPromptInjectionRunToolTimeoutProducesNoFinding(t *testing.T) {
+	ctx := context.Background()
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			return nil, context.DeadlineExceeded
+		},
+	}
+
+	p := NewPromptInjection()
+	out, err := p.RunTool(ctx, probe.ToolContext{Caller: caller, Tool: greetTool()})
+	if err != nil {
+		t.Fatalf("RunTool() error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0: no output text to inspect when the call timed out", len(out))
+	}
+}
+
 // TestPromptInjectionRunToolMaxScanLenBoundsDetection confirms the
 // maxScanLen cap is actually enforced end to end (RunTool -> Detect), not
 // just in promptinjection's own package-level tests: a phrase placed well
