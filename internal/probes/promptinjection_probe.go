@@ -5,11 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mbishflavien/mcp-xray/findings"
 	"github.com/mbishflavien/mcp-xray/internal/probes/promptinjection"
 	"github.com/mbishflavien/mcp-xray/probe"
 )
+
+// excerptContext is how many bytes of surrounding text excerptAround
+// includes on each side of a match, so a Finding's Evidence shows
+// something a reviewer can actually orient on instead of a bare matched
+// phrase with no context.
+const excerptContext = 80
 
 // PromptInjection is a probe.ToolProbe: for each tool, it calls the tool
 // once with a benign, valid-looking argument set (BaselineArgs, the same
@@ -85,10 +92,32 @@ func (p *PromptInjection) RunTool(ctx context.Context, tc probe.ToolContext) ([]
 			Title:    fmt.Sprintf("%s: found in %q's output", m.Kind, tc.Tool.Name),
 			Detail:   fmt.Sprintf("matched %q", m.Snippet),
 			Target:   tc.Tool.Name,
-			Evidence: evidenceFor(result, nil),
+			Evidence: excerptAround(text, m.Index),
 		})
 	}
 	return out, nil
+}
+
+// excerptAround returns the text surrounding byte offset index (see
+// excerptContext), truncated to maxEvidenceLen - a precise excerpt a
+// reviewer can orient on, instead of evidenceFor's context-free prefix of
+// the whole response (which, for a match deep inside a large response,
+// might not even include the match at all). Snaps both ends to a UTF-8
+// rune boundary so the slice is never invalid UTF-8, even if index lands
+// just past capForScan's own cut point.
+func excerptAround(text string, index int) string {
+	if index < 0 || index > len(text) {
+		return truncate(text, maxEvidenceLen)
+	}
+	start := max(index-excerptContext, 0)
+	end := min(index+excerptContext, len(text))
+	for start > 0 && !utf8.RuneStart(text[start]) {
+		start--
+	}
+	for end < len(text) && !utf8.RuneStart(text[end]) {
+		end++
+	}
+	return truncate(text[start:end], maxEvidenceLen)
 }
 
 // severityForPromptInjectionKind maps a promptinjection.Kind* constant to

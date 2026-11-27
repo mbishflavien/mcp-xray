@@ -2,6 +2,7 @@ package probes
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/mbishflavien/mcp-xray/findings"
@@ -54,6 +55,9 @@ func TestPromptInjectionRunToolDetectsInstructionOverride(t *testing.T) {
 	}
 	if len(out) != 1 || out[0].Kind != promptinjection.KindInstructionOverride || out[0].Severity != findings.High {
 		t.Errorf("findings = %+v, want exactly one High %s", out, promptinjection.KindInstructionOverride)
+	}
+	if !strings.Contains(strings.ToLower(out[0].Evidence), "ignore all previous instructions") {
+		t.Errorf("Evidence = %q, want it to include the matched phrase", out[0].Evidence)
 	}
 }
 
