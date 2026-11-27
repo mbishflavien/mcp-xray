@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/mbishflavien/mcp-xray/findings"
 	"github.com/mbishflavien/mcp-xray/internal/probes/promptinjection"
@@ -265,5 +266,28 @@ func TestPromptInjectionRunToolNoTextContentProducesNoFinding(t *testing.T) {
 	}
 	if len(out) != 0 {
 		t.Errorf("got %d findings, want 0 for an all-image result", len(out))
+	}
+}
+
+// TestExcerptAroundIsUTF8BoundarySafe mirrors TestTruncate's own
+// boundary test: a multi-byte rune straddling either edge of the excerpt
+// window must not produce invalid UTF-8, for every possible match index
+// across a long multi-byte string.
+func TestExcerptAroundIsUTF8BoundarySafe(t *testing.T) {
+	multiByte := strings.Repeat("é", 200) // é is 2 bytes in UTF-8
+	for index := range len(multiByte) {
+		if got := excerptAround(multiByte, index); !utf8.ValidString(got) {
+			t.Fatalf("excerptAround(text, %d) = %q, not valid UTF-8", index, got)
+		}
+	}
+}
+
+func TestExcerptAroundOutOfRangeIndexFallsBack(t *testing.T) {
+	text := "hello world"
+	if got := excerptAround(text, -1); got != text {
+		t.Errorf("excerptAround(text, -1) = %q, want the whole text as a fallback", got)
+	}
+	if got := excerptAround(text, len(text)+100); got != text {
+		t.Errorf("excerptAround(text, out-of-range) = %q, want the whole text as a fallback", got)
 	}
 }
