@@ -17,15 +17,18 @@ Point it at an MCP server over stdio and it:
   times in a row: a tool that crashes or hangs under that repeated load is
   flagged High, and one that shows no sign of being rate-limited at all
   (no rejection, no growing latency) is flagged Low as a missing control.
+- Calls every tool once with a benign argument set and inspects the
+  response text for content shaped like an attempt to hijack whatever LLM
+  reads it next: override phrases, forged chat-template delimiters,
+  exfiltration directives, or invisible Unicode tricks.
 - Gates every call through a destructive-tool-name safety policy first, so a
   probe can't actually invoke something like `delete_all_records` without an
   explicit `--allow-tool` opt-in.
 - Scores the outcome by severity and reports it as text, JSON, or SARIF
   (`--format`), with `--fail-on <severity>` for CI gating.
 
-Still missing, planned next: prompt-injection-in-output detection, an
-HTTP/Streamable transport (stdio only for now), and a live terminal
-dashboard.
+Still missing, planned next: an HTTP/Streamable transport (stdio only for
+now) and a live terminal dashboard.
 
 ## Status
 
@@ -91,10 +94,9 @@ a dedicated unit test since `leaky_counter`'s crash - alphabetically
 earlier - ends the live connection before the probe's own loop reaches it
 in a default run.
 
-Still missing: a prompt-injection-in-output probe; the live terminal
-dashboard; an HTTP/Streamable transport; and caching the compiled WASI
-module across probe runs (every sandboxed call currently recompiles it,
-which is correct but slow).
+Still missing: the live terminal dashboard; an HTTP/Streamable transport;
+and caching the compiled WASI module across probe runs (every sandboxed
+call currently recompiles it, which is correct but slow).
 
 ### Hardening against the server it's scanning
 
