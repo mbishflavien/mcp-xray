@@ -186,3 +186,26 @@ func detectHiddenContent(text string) *Match {
 	}
 	return nil
 }
+
+// Detect scans text for every category this package knows about,
+// returning one Match per category that fires - a tool's output can
+// trigger more than one at once, which real indirect-injection payloads
+// often do (combining an override phrase with a forged delimiter, say).
+// text is capped to maxScanLen before anything else runs.
+func Detect(text string) []Match {
+	capped := capForScan(text)
+	lower := strings.ToLower(capped)
+
+	var matches []Match
+	for _, m := range []*Match{
+		detectInstructionOverride(lower),
+		detectRoleImpersonation(lower),
+		detectExfiltration(lower),
+		detectHiddenContent(capped),
+	} {
+		if m != nil {
+			matches = append(matches, *m)
+		}
+	}
+	return matches
+}
