@@ -282,6 +282,29 @@ func TestExcerptAroundIsUTF8BoundarySafe(t *testing.T) {
 	}
 }
 
+// TestPromptInjectionRunToolBareURLProducesNoFinding confirms the
+// exfiltration category's false-positive guard (a URL needs a
+// co-occurring actuation verb) holds through the whole RunTool path, not
+// just promptinjection.Detect in isolation - a tool that legitimately
+// returns a URL (a link to documentation, say) shouldn't get flagged.
+func TestPromptInjectionRunToolBareURLProducesNoFinding(t *testing.T) {
+	ctx := context.Background()
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			return textResult("For more details, see http://example.com/docs"), nil
+		},
+	}
+
+	p := NewPromptInjection()
+	out, err := p.RunTool(ctx, probe.ToolContext{Caller: caller, Tool: greetTool()})
+	if err != nil {
+		t.Fatalf("RunTool() error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0 for a bare URL with no actuation verb", len(out))
+	}
+}
+
 func TestExcerptAroundOutOfRangeIndexFallsBack(t *testing.T) {
 	text := "hello world"
 	if got := excerptAround(text, -1); got != text {
