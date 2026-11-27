@@ -94,3 +94,29 @@ func detectInstructionOverride(lower string) *Match {
 	}
 	return &Match{Kind: KindInstructionOverride, Snippet: phrase, Index: idx}
 }
+
+// KindRoleImpersonation fires on forged LLM chat-template delimiters.
+// Unlike instruction_override, these are essentially never legitimate in
+// real tool output - a tool has no reason to emit a raw "<|system|>" or
+// "[INST]" token - so this carries no documented false-positive caveat.
+const KindRoleImpersonation = "prompt_injection_role_impersonation"
+
+var roleImpersonationMarkers = []string{
+	"<|system|>",
+	"<|im_start|>",
+	"<|im_end|>",
+	"[inst]",
+	"[/inst]",
+	"###instruction",
+	"### instruction",
+	"###system",
+	"### system",
+}
+
+func detectRoleImpersonation(lower string) *Match {
+	marker, idx := matchFirstPhrase(lower, roleImpersonationMarkers)
+	if idx < 0 {
+		return nil
+	}
+	return &Match{Kind: KindRoleImpersonation, Snippet: marker, Index: idx}
+}
