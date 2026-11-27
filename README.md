@@ -193,6 +193,17 @@ go build -o bin/example-server ./cmd/example-server   # a minimal MCP server to 
 ./bin/mcp-xray --allow-tool delete_all_records -- ./bin/example-server
 ```
 
+`go test ./...` instantiates a fresh WASI runtime per sandboxed call (no
+caching across probe runs yet - see "Still missing" above), and
+`internal/probes`'s own test suite makes dozens of these back to back.
+On a memory-constrained machine this can produce a spurious `module
+closed with context deadline exceeded` - the sandbox's own timeout
+firing because instantiation itself was slow, not a failure in the code
+under test. If you hit that, re-run `internal/probes`'s tests in smaller
+batches (`go test ./internal/probes/ -run TestSchemaFuzz`, then
+`-run TestAuthBypass`, and so on) rather than treating it as a real
+failure.
+
 Requires Go 1.23 or newer.
 
 ## Architecture
