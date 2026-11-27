@@ -242,3 +242,28 @@ func TestPromptInjectionRunToolCallsOnce(t *testing.T) {
 		t.Errorf("CallTool was invoked %d times, want exactly 1", calls)
 	}
 }
+
+// TestPromptInjectionRunToolNoTextContentProducesNoFinding confirms a
+// tool returning only non-text content (an image, say) produces no
+// finding and - more importantly - doesn't panic. textContent only ever
+// collects *mcp.TextContent blocks; an all-image result should yield an
+// empty string for Detect to scan, not a type-assertion failure.
+func TestPromptInjectionRunToolNoTextContentProducesNoFinding(t *testing.T) {
+	ctx := context.Background()
+	caller := &stubCaller{
+		call: func(context.Context, string, map[string]any) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{&mcp.ImageContent{Data: []byte{0xFF, 0xD8}, MIMEType: "image/jpeg"}},
+			}, nil
+		},
+	}
+
+	p := NewPromptInjection()
+	out, err := p.RunTool(ctx, probe.ToolContext{Caller: caller, Tool: greetTool()})
+	if err != nil {
+		t.Fatalf("RunTool() error: %v", err)
+	}
+	if len(out) != 0 {
+		t.Errorf("got %d findings, want 0 for an all-image result", len(out))
+	}
+}
