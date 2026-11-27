@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mbishflavien/mcp-xray/findings"
+	"github.com/mbishflavien/mcp-xray/internal/probes/promptinjection"
 	"github.com/mbishflavien/mcp-xray/probe"
 )
 
@@ -69,6 +70,40 @@ func (p *PromptInjection) RunTool(ctx context.Context, tc probe.ToolContext) ([]
 		return nil, nil
 	}
 
-	// Detect wiring lands in the next commit.
-	return nil, nil
+	text := textContent(result)
+	matches := promptinjection.Detect(text)
+	if len(matches) == 0 {
+		return nil, nil
+	}
+
+	out := make([]findings.Finding, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, findings.Finding{
+			ProbeID:  p.ID(),
+			Severity: severityForPromptInjectionKind(m.Kind),
+			Kind:     m.Kind,
+			Title:    fmt.Sprintf("%s: found in %q's output", m.Kind, tc.Tool.Name),
+			Detail:   fmt.Sprintf("matched %q", m.Snippet),
+			Target:   tc.Tool.Name,
+			Evidence: evidenceFor(result, nil),
+		})
+	}
+	return out, nil
+}
+
+// severityForPromptInjectionKind maps a promptinjection.Kind* constant to
+// a Finding severity. role_impersonation and hidden_content are Critical:
+// both have essentially no legitimate reason to appear in real tool
+// output at all. instruction_override and exfiltration are High: still
+// serious, but each carries a documented, if small, false-positive risk
+// (see their doc comments in internal/probes/promptinjection).
+func severityForPromptInjectionKind(kind string) findings.Severity {
+	switch kind {
+	case promptinjection.KindRoleImpersonation, promptinjection.KindHiddenContent:
+		return findings.Critical
+	case promptinjection.KindInstructionOverride, promptinjection.KindExfiltration:
+		return findings.High
+	default:
+		return findings.Info
+	}
 }
