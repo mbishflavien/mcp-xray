@@ -14,6 +14,8 @@
 // this codebase.
 package promptinjection
 
+import "strings"
+
 // maxScanLen caps how many bytes of a tool's response text Detect will
 // scan. A malicious or buggy MCP server could otherwise return an
 // arbitrarily large response specifically to inflate the cost of scanning
@@ -47,4 +49,48 @@ func capForScan(text string) string {
 		return text
 	}
 	return text[:maxScanLen]
+}
+
+// KindInstructionOverride fires on phrases attempting to override the
+// agent's own instructions. There's some false-positive risk here - a
+// tool that legitimately discusses prompt injection (a security-education
+// resource, say) could quote these as examples - documented rather than
+// engineered around, the same tradeoff auth-bypass's field-name heuristic
+// and rate-limit's latency heuristic already make elsewhere in this
+// codebase.
+const KindInstructionOverride = "prompt_injection_instruction_override"
+
+var instructionOverridePhrases = []string{
+	"ignore previous instructions",
+	"ignore all previous instructions",
+	"ignore the above instructions",
+	"disregard previous instructions",
+	"disregard the above",
+	"disregard all prior instructions",
+	"forget your instructions",
+	"forget everything above",
+	"new instructions:",
+	"you must now",
+	"do not follow your system prompt",
+}
+
+// matchFirstPhrase returns the first phrase from phrases found in lower
+// (already-lowercased text) and its byte index, or ("", -1) if none
+// match. Only the first match matters: one hit is enough to report a
+// category once, see Detect.
+func matchFirstPhrase(lower string, phrases []string) (phrase string, index int) {
+	for _, p := range phrases {
+		if idx := strings.Index(lower, p); idx >= 0 {
+			return p, idx
+		}
+	}
+	return "", -1
+}
+
+func detectInstructionOverride(lower string) *Match {
+	phrase, idx := matchFirstPhrase(lower, instructionOverridePhrases)
+	if idx < 0 {
+		return nil
+	}
+	return &Match{Kind: KindInstructionOverride, Snippet: phrase, Index: idx}
 }
