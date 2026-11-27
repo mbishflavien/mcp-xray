@@ -94,6 +94,39 @@ a dedicated unit test since `leaky_counter`'s crash - alphabetically
 earlier - ends the live connection before the probe's own loop reaches it
 in a default run.
 
+The prompt-injection probe (`internal/probes/promptinjection`) calls each
+tool once with a benign argument set - reusing `BaselineArgs`, the same
+generator the rate-limit probe uses, rather than compiling a fourth
+near-identical WASI module - and, only if that call cleanly succeeds,
+scans the response text for content shaped like an attempt to hijack
+whatever LLM reads it next. It's the one probe with no WASI sandboxing of
+its own: nothing in it parses a tool's schema, so there's no
+attacker-controlled schema-parsing logic to protect; what it does bound is
+how much of the (attacker-controlled, potentially huge) response text it
+ever scans (`maxScanLen`, 50,000 bytes). Because the argument sent is
+always the tool's own benign baseline, never one of schema-fuzz's
+adversarial payloads, a match can never be mcp-xray's own probe string
+reflected back - anything found is something the server chose to say on
+its own. Four categories, each independently reportable:
+`prompt_injection_instruction_override` and `_exfiltration` (High, each
+with a small documented false-positive risk - see
+`internal/probes/promptinjection/detect.go`); `_role_impersonation` and
+`_hidden_content` (Critical, essentially never legitimate in real tool
+output). Verified against `cmd/example-server`: `get_notes` (a note
+combining an override phrase, a forged `<|system|>` delimiter, and an
+exfiltration directive in one payload - realistic, since real
+indirect-injection attempts often stack techniques) fires all three of
+the first kinds; `get_signature` (a payload hidden entirely in zero-width
+Unicode characters) fires `_hidden_content` alone; every other tool
+produces no prompt-injection finding at all. A default scan doesn't show
+this cleanly end to end - `leaky_counter`'s crash under the rate-limit
+probe (which runs first) ends the connection before this probe's turn,
+the same cascade the "known limitation" paragraph above describes - so
+this was verified with a standalone runner built from the public API
+(`scan.NewRunner` with only this probe) against the real
+`cmd/example-server` binary, confirming the four findings above with no
+other probe's crash in the way.
+
 Still missing: the live terminal dashboard; an HTTP/Streamable transport;
 and caching the compiled WASI module across probe runs (every sandboxed
 call currently recompiles it, which is correct but slow).
