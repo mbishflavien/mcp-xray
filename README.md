@@ -174,6 +174,12 @@ pass found and fixed several gaps in that:
   calls, so canceling a scan (Ctrl-C) stops a burst immediately instead
   of grinding through its remaining calls - and a cancellation never
   gets misreported as a rate-limit finding.
+- The prompt-injection probe inspects a tool's own response text, which
+  is fully attacker-controlled and can be arbitrarily large. Capped at
+  50,000 bytes (`maxScanLen`) before any pattern matching runs, and the
+  evidence it reports is built from a small excerpt around the actual
+  match rather than the whole response, so neither the scan itself nor
+  the resulting report can be inflated by an oversized reply.
 
 ## Getting started
 
