@@ -229,7 +229,7 @@ internal/
   probes/            embeds compiled probe .wasm, runs it through the sandbox,
                      and adapts each into a probe.ToolProbe/ServerProbe
                      (schemafuzz_probe.go, authbypass_probe.go,
-                     ratelimit_probe.go)
+                     ratelimit_probe.go, promptinjection_probe.go)
   probes/schemashape/ the schema-fill helpers schemafuzz/authbypass/ratelimit
                      all share: parse a flat object schema, cap it, build a
                      minimal valid-looking argument set
@@ -237,5 +237,8 @@ internal/
   probes/authbypass/ the auth-bypass mutation generator (plain Go, natively testable)
   probes/ratelimit/  the rate-limit probe's benign-baseline generator (plain
                      Go, natively testable)
+  probes/promptinjection/ the prompt-injection probe's pattern matcher
+                     (plain Go, natively testable, no WASI - nothing in it
+                     parses a schema, so there's nothing to sandbox)
   sandbox/           runs a probe's .wasm as a sandboxed WASI module via wazero
 ```
