@@ -32,3 +32,12 @@ func AuthBypass() probe.ToolProbe {
 func RateLimit() probe.ServerProbe {
 	return probes.NewRateLimit()
 }
+
+// PromptInjection returns the prompt-injection probe: for every tool, it
+// calls that tool once with a benign argument set and inspects the
+// response text for content shaped like an attempt to hijack whatever
+// LLM reads it next - override phrases, forged chat-template delimiters,
+// exfiltration directives, or invisible Unicode tricks.
+func PromptInjection() probe.ToolProbe {
+	return probes.NewPromptInjection()
+}
