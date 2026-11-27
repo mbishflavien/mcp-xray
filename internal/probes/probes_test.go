@@ -84,7 +84,7 @@ func TestAuthBypassMutationsInvalidSchema(t *testing.T) {
 	}
 }
 
-func TestRateLimitBaselineEndToEnd(t *testing.T) {
+func TestBaselineArgsEndToEnd(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -93,21 +93,21 @@ func TestRateLimitBaselineEndToEnd(t *testing.T) {
 		"properties": {"name": {"type": "string"}}
 	}`)
 
-	args, err := RateLimitBaseline(ctx, "greet", schema)
+	args, err := BaselineArgs(ctx, "greet", schema)
 	if err != nil {
-		t.Fatalf("RateLimitBaseline() error: %v", err)
+		t.Fatalf("BaselineArgs() error: %v", err)
 	}
 	if args["name"] != "mcp-xray-probe" {
 		t.Errorf("baseline args = %v, want name filled with a valid-looking placeholder", args)
 	}
 }
 
-func TestRateLimitBaselineInvalidSchema(t *testing.T) {
+func TestBaselineArgsInvalidSchema(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := RateLimitBaseline(ctx, "greet", json.RawMessage(`not json`))
+	_, err := BaselineArgs(ctx, "greet", json.RawMessage(`not json`))
 	if err == nil {
-		t.Error("RateLimitBaseline() with invalid schema should return an error")
+		t.Error("BaselineArgs() with invalid schema should return an error")
 	}
 }

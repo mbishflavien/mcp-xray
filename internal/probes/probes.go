@@ -35,10 +35,14 @@ func AuthBypassMutations(ctx context.Context, toolName string, schema json.RawMe
 	return runMutationProbe(ctx, authBypassWasm, toolName, schema)
 }
 
-// RateLimitBaseline runs the rate-limit probe's generator sandboxed and
-// returns the single benign, valid-looking argument set it built for the
-// given tool - the args to repeat, unchanged, for every call in a burst.
-func RateLimitBaseline(ctx context.Context, toolName string, schema json.RawMessage) (map[string]any, error) {
+// BaselineArgs runs the rate-limit probe's generator sandboxed and returns
+// the single benign, valid-looking argument set it built for the given
+// tool. Originally built for the rate-limit probe (the args to repeat,
+// unchanged, for every call in its burst), but the need - "give me one
+// valid-looking argument set for this tool" - isn't specific to rate
+// limiting, so the prompt-injection probe reuses it too rather than
+// compiling a near-identical fourth WASI generator.
+func BaselineArgs(ctx context.Context, toolName string, schema json.RawMessage) (map[string]any, error) {
 	mutations, err := runMutationProbe(ctx, rateLimitWasm, toolName, schema)
 	if err != nil {
 		return nil, err

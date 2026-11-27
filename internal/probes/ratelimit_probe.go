@@ -120,7 +120,7 @@ func (p *RateLimit) RunServer(ctx context.Context, sc probe.ServerContext) ([]fi
 			errs = append(errs, fmt.Errorf("marshal input schema for %q: %w", tool.Name, err))
 			continue
 		}
-		args, err := RateLimitBaseline(ctx, tool.Name, schema)
+		args, err := BaselineArgs(ctx, tool.Name, schema)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("generate rate-limit baseline for %q: %w", tool.Name, err))
 			continue
