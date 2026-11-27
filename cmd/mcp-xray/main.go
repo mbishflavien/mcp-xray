@@ -109,7 +109,16 @@ func run(args []string) (int, error) {
 	// or auth-bypass would mean its baseline measurements - and its own
 	// crash detection - could be muddied by whatever those adversarial
 	// probes already did to the target first.
-	runner := scan.NewRunner([]probe.Probe{builtinprobes.RateLimit(), builtinprobes.SchemaFuzz(), builtinprobes.AuthBypass()}, scan.Options{
+	// PromptInjection runs last: it makes one single benign call per
+	// tool, the same cost profile as auth-bypass/schema-fuzz's own calls,
+	// and (unlike RateLimit) has no connection-freshness concern of its
+	// own to protect.
+	runner := scan.NewRunner([]probe.Probe{
+		builtinprobes.RateLimit(),
+		builtinprobes.SchemaFuzz(),
+		builtinprobes.AuthBypass(),
+		builtinprobes.PromptInjection(),
+	}, scan.Options{
 		CallTimeout: *timeout,
 		Policy:      policy,
 	})
