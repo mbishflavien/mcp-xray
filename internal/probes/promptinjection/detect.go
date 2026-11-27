@@ -120,3 +120,36 @@ func detectRoleImpersonation(lower string) *Match {
 	}
 	return &Match{Kind: KindRoleImpersonation, Snippet: marker, Index: idx}
 }
+
+// KindExfiltration fires on a URL and an actuation verb co-occurring in
+// the same text - an instruction to send data somewhere, not just the
+// presence of a URL on its own. A bare URL alone is unremarkable (plenty
+// of legitimate tool output links to something); it's the combination
+// with "send this to", "post the following to", and similar that makes it
+// an exfiltration directive. The same false-positive guard auth-bypass's
+// "author" exclusion already models elsewhere in this codebase.
+const KindExfiltration = "prompt_injection_exfiltration"
+
+var exfiltrationVerbs = []string{
+	"send", "email", "post", "upload", "exfiltrate", "leak", "transmit",
+}
+
+func detectExfiltration(lower string) *Match {
+	urlIdx := indexOfURL(lower)
+	if urlIdx < 0 {
+		return nil
+	}
+	verb, verbIdx := matchFirstPhrase(lower, exfiltrationVerbs)
+	if verb == "" {
+		return nil
+	}
+	idx := min(urlIdx, verbIdx)
+	return &Match{Kind: KindExfiltration, Snippet: verb, Index: idx}
+}
+
+func indexOfURL(lower string) int {
+	if idx := strings.Index(lower, "http://"); idx >= 0 {
+		return idx
+	}
+	return strings.Index(lower, "https://")
+}
