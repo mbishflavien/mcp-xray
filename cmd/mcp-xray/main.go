@@ -51,6 +51,8 @@ func run(args []string) (int, error) {
 	var allowTools repeatableFlag
 	fs.Var(&allowTools, "allow-tool", "allow calling this tool even if its name looks destructive (repeatable)")
 	url := fs.String("url", "", "connect to an MCP server over HTTP at this URL, instead of starting a command over stdio")
+	var headers repeatableFlag
+	fs.Var(&headers, "header", `send this header ("Name: value") with every HTTP request; only valid with -url (repeatable)`)
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "usage: mcp-xray [flags] -- <command to start the MCP server> [args...]")
 		fmt.Fprintln(fs.Output(), "       mcp-xray [flags] -url <http(s) endpoint> --")
@@ -72,6 +74,18 @@ func run(args []string) (int, error) {
 	if *url != "" && len(serverCmd) > 0 {
 		return 0, fmt.Errorf("-url and a command after -- are mutually exclusive; give exactly one")
 	}
+	if *url == "" && len(headers) > 0 {
+		return 0, fmt.Errorf("-header only applies to -url; it has no effect on a stdio command")
+	}
+
+	parsedHeaders := make(map[string]string, len(headers))
+	for _, raw := range headers {
+		name, value, err := inspector.ParseHeaderFlag(raw)
+		if err != nil {
+			return 0, err
+		}
+		parsedHeaders[name] = value
+	}
 
 	outputFormat, err := report.ParseFormat(*format)
 	if err != nil {
@@ -87,7 +101,7 @@ func run(args []string) (int, error) {
 
 	var session *inspector.Session
 	if *url != "" {
-		session, err = inspector.ConnectHTTP(ctx, *url, *timeout, inspector.HTTPConfig{})
+		session, err = inspector.ConnectHTTP(ctx, *url, *timeout, inspector.HTTPConfig{Headers: parsedHeaders})
 	} else {
 		session, err = inspector.ConnectCommand(ctx, serverCmd[0], serverCmd[1:]...)
 	}

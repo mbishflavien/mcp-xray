@@ -32,6 +32,26 @@ func TestRunRejectsMissingDoubleDash(t *testing.T) {
 	}
 }
 
+func TestRunRejectsHeaderWithoutURL(t *testing.T) {
+	_, err := run([]string{"-header", "Authorization: Bearer x", "--", "echo", "hi"})
+	if err == nil {
+		t.Fatal("run() with -header but no -url: want an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "-header") {
+		t.Errorf("error = %q, want it to mention -header", err)
+	}
+}
+
+func TestRunRejectsMalformedHeaderBeforeConnecting(t *testing.T) {
+	_, err := run([]string{"-url", "http://localhost:1", "-header", "no-colon", "--"})
+	if err == nil {
+		t.Fatal("run() with a malformed -header value: want an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "':'") {
+		t.Errorf("error = %q, want it to mention the missing ':' separator", err)
+	}
+}
+
 // TestRunRejectsBadURLScheme confirms a -url with an unsupported scheme
 // fails before run() ever tries to connect, surfacing
 // inspector.ConnectHTTP's own validation through the CLI.
