@@ -52,6 +52,16 @@ func TestRunRejectsMalformedHeaderBeforeConnecting(t *testing.T) {
 	}
 }
 
+func TestRunRejectsInsecureSkipTLSVerifyWithoutURL(t *testing.T) {
+	_, err := run([]string{"-insecure-skip-tls-verify", "--", "echo", "hi"})
+	if err == nil {
+		t.Fatal("run() with -insecure-skip-tls-verify but no -url: want an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "-insecure-skip-tls-verify") {
+		t.Errorf("error = %q, want it to mention -insecure-skip-tls-verify", err)
+	}
+}
+
 // TestRunRejectsBadURLScheme confirms a -url with an unsupported scheme
 // fails before run() ever tries to connect, surfacing
 // inspector.ConnectHTTP's own validation through the CLI.
