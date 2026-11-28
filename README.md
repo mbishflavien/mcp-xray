@@ -172,6 +172,16 @@ adversarial at the transport level too:
   let net/http reject it late and confusingly" approach `--url`'s scheme
   check takes too.
 
+**`-insecure-skip-tls-verify` disables TLS certificate verification
+entirely for that scan.** It defaults to `false` - a self-signed
+certificate is rejected unless you pass this flag explicitly - and it
+exists for exactly one case: scanning a server you control that happens
+to use a self-signed certificate (a local dev instance, a staging
+environment without a real cert). Passing it against anything else
+means mcp-xray can no longer tell the real server from an
+attacker-in-the-middle impersonating it, which defeats the point of
+using HTTPS for this scan at all.
+
 ### Hardening against the server it's scanning
 
 mcp-xray's own threat model is that the MCP server being scanned may be
