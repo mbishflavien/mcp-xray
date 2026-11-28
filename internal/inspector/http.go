@@ -81,7 +81,15 @@ func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cf
 		CheckRedirect: refuseRedirects,
 	}
 
-	s, err := Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: client})
+	// mcp-xray never acts on a server-initiated message mid-scan - it
+	// takes one Snapshot up front, then only ever makes its own CallTool
+	// requests - so the standalone SSE stream's only effect here would be
+	// to hold one more long-lived connection open against a server that
+	// might be malicious. Disabling it removes that attack surface
+	// entirely rather than just bounding it.
+	transport := &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: client, DisableStandaloneSSE: true}
+
+	s, err := Connect(ctx, transport)
 	if err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", endpoint, err)
 	}
