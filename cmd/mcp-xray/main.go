@@ -19,11 +19,12 @@ import (
 	"github.com/mbishflavien/mcp-xray/scan"
 )
 
-// allowToolFlag collects repeated -allow-tool flags.
-type allowToolFlag []string
+// repeatableFlag collects every occurrence of a flag that can be given
+// more than once, such as -allow-tool.
+type repeatableFlag []string
 
-func (f *allowToolFlag) String() string { return strings.Join(*f, ",") }
-func (f *allowToolFlag) Set(value string) error {
+func (f *repeatableFlag) String() string { return strings.Join(*f, ",") }
+func (f *repeatableFlag) Set(value string) error {
 	*f = append(*f, value)
 	return nil
 }
@@ -47,7 +48,7 @@ func run(args []string) (int, error) {
 	failOn := fs.String("fail-on", "none", "exit with status 1 if a finding at or above this severity exists (none, info, low, medium, high, critical)")
 	timeout := fs.Duration("timeout", 5*time.Second, "per-call timeout for each probe request")
 	allowDestructive := fs.Bool("allow-destructive", false, "disable the destructive-tool-name safety gate entirely")
-	var allowTools allowToolFlag
+	var allowTools repeatableFlag
 	fs.Var(&allowTools, "allow-tool", "allow calling this tool even if its name looks destructive (repeatable)")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "usage: mcp-xray [flags] -- <command to start the MCP server> [args...]")
