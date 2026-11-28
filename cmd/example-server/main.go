@@ -5,8 +5,10 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -51,6 +53,9 @@ type getSignatureArgs struct {
 }
 
 func main() {
+	httpAddr := flag.String("http", "", "serve over HTTP (MCP Streamable HTTP transport) on this address instead of stdio, e.g. :8080")
+	flag.Parse()
+
 	server := mcp.NewServer(&mcp.Implementation{Name: "example-server", Version: "0.1.0"}, nil)
 
 	mcp.AddTool(server, &mcp.Tool{Name: "greet", Description: "say hi to someone"},
@@ -176,6 +181,15 @@ func main() {
 				Content: []mcp.Content{&mcp.TextContent{Text: "processed: " + args.Data}},
 			}, nil, nil
 		})
+
+	if *httpAddr != "" {
+		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+		log.Printf("example-server: listening on %s", *httpAddr)
+		if err := http.ListenAndServe(*httpAddr, handler); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)
