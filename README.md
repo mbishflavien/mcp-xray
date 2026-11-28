@@ -27,8 +27,7 @@ Point it at an MCP server - over stdio, or over HTTP (`--url`) - and it:
 - Scores the outcome by severity and reports it as text, JSON, or SARIF
   (`--format`), with `--fail-on <severity>` for CI gating.
 
-Still missing, planned next: an HTTP/Streamable transport (stdio only for
-now) and a live terminal dashboard.
+Still missing, planned next: a live terminal dashboard.
 
 ## Status
 
@@ -127,9 +126,9 @@ this was verified with a standalone runner built from the public API
 `cmd/example-server` binary, confirming the four findings above with no
 other probe's crash in the way.
 
-Still missing: the live terminal dashboard; an HTTP/Streamable transport;
-and caching the compiled WASI module across probe runs (every sandboxed
-call currently recompiles it, which is correct but slow).
+Still missing: the live terminal dashboard; and caching the compiled WASI
+module across probe runs (every sandboxed call currently recompiles it,
+which is correct but slow).
 
 ### Hardening against the server it's scanning
 
