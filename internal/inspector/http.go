@@ -113,7 +113,12 @@ func (t *headerInjectingTransport) RoundTrip(req *http.Request) (*http.Response,
 			req.Header.Set(name, value)
 		}
 	}
-	return t.base.RoundTrip(req)
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = &cappedBody{ReadCloser: resp.Body, limit: maxResponseBodyBytes}
+	return resp, nil
 }
 
 // maxResponseBodyBytes bounds how much of a single HTTP response body

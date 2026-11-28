@@ -356,3 +356,28 @@ func TestCappedBodyErrorsPastTheLimit(t *testing.T) {
 		t.Error("ReadAll() over an 11-byte body with limit=10: want an error, got nil")
 	}
 }
+
+// TestConnectHTTPCapsOversizedResponseBody confirms a real server's
+// response body larger than maxResponseBodyBytes fails the call with a
+// clear error instead of being read in full (or hanging, against an
+// endless one).
+func TestConnectHTTPCapsOversizedResponseBody(t *testing.T) {
+	old := maxResponseBodyBytes
+	maxResponseBodyBytes = 1024
+	t.Cleanup(func() { maxResponseBodyBytes = old })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{`))
+		w.Write(make([]byte, maxResponseBodyBytes*2))
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := ConnectHTTP(ctx, srv.URL, 5*time.Second, HTTPConfig{}); err == nil {
+		t.Error("ConnectHTTP() against an oversized response body: want an error, got nil")
+	}
+}
