@@ -1,9 +1,43 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// captureStdout temporarily redirects os.Stdout (run() writes its report
+// there directly, not to an injectable io.Writer) and returns a function
+// that restores it and returns everything written.
+func captureStdout(t *testing.T) func() string {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe() error: %v", err)
+	}
+	os.Stdout = w
+
+	done := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		io.Copy(&buf, r)
+		done <- buf.String()
+	}()
+
+	return func() string {
+		w.Close()
+		os.Stdout = old
+		return <-done
+	}
+}
 
 func TestRunRequiresEitherURLOrCommand(t *testing.T) {
 	_, err := run([]string{"--"})
@@ -72,5 +106,38 @@ func TestRunRejectsBadURLScheme(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "scheme") {
 		t.Errorf("error = %q, want it to mention the unsupported scheme", err)
+	}
+}
+
+type e2eGreetArgs struct {
+	Name string `json:"name" jsonschema:"the person to greet"`
+}
+
+// TestRunConnectsOverHTTP runs the full run() path end to end against a
+// real MCP server reached over HTTP via -url, the same dispatch the
+// manual example-server -http verification already confirmed by hand -
+// this locks it in as a permanent regression test.
+func TestRunConnectsOverHTTP(t *testing.T) {
+	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "e2e-test-server", Version: "1.0.0"}, nil)
+	mcp.AddTool(mcpServer, &mcp.Tool{Name: "greet", Description: "say hi"},
+		func(_ context.Context, _ *mcp.CallToolRequest, args e2eGreetArgs) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "Hi " + args.Name}}}, nil, nil
+		})
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	restore := captureStdout(t)
+	code, err := run([]string{"-timeout", "5s", "-url", srv.URL, "--"})
+	output := restore()
+
+	if err != nil {
+		t.Fatalf("run() error: %v", err)
+	}
+	if code != 0 {
+		t.Errorf("run() exit code = %d, want 0", code)
+	}
+	if !strings.Contains(output, "e2e-test-server") {
+		t.Errorf("output = %q, want it to mention the server name", output)
 	}
 }

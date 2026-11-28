@@ -20,7 +20,7 @@ import (
 )
 
 // repeatableFlag collects every occurrence of a flag that can be given
-// more than once, such as -allow-tool.
+// more than once, such as -allow-tool or -header.
 type repeatableFlag []string
 
 func (f *repeatableFlag) String() string { return strings.Join(*f, ",") }
