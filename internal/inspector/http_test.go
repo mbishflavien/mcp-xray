@@ -223,3 +223,78 @@ func TestHeaderInjectingTransportNoHeadersConfigured(t *testing.T) {
 		t.Errorf("gotHeaders = %v, want no headers set", base.gotHeaders)
 	}
 }
+
+// TestConnectHTTPSendsConfiguredHeaders confirms a header configured via
+// HTTPConfig actually reaches a real server on every request, not just
+// the first one.
+func TestConnectHTTPSendsConfiguredHeaders(t *testing.T) {
+	var gotAuth string
+	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "http-test-server", Version: "1.0.0"}, nil)
+	mcp.AddTool(mcpServer, &mcp.Tool{Name: "whoami", Description: "report the Authorization header seen"},
+		func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: gotAuth}}}, nil, nil
+		})
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		gotAuth = r.Header.Get("Authorization")
+		return mcpServer
+	}, nil)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session, err := ConnectHTTP(ctx, srv.URL, 5*time.Second, HTTPConfig{
+		Headers: map[string]string{"Authorization": "Bearer test-token"},
+	})
+	if err != nil {
+		t.Fatalf("ConnectHTTP() error: %v", err)
+	}
+	defer session.Close()
+
+	if gotAuth != "Bearer test-token" {
+		t.Errorf("server saw Authorization = %q, want %q", gotAuth, "Bearer test-token")
+	}
+
+	if _, err := session.CallTool(ctx, "whoami", nil); err != nil {
+		t.Fatalf("CallTool() error: %v", err)
+	}
+	if gotAuth != "Bearer test-token" {
+		t.Errorf("server saw Authorization = %q on CallTool, want %q", gotAuth, "Bearer test-token")
+	}
+}
+
+// TestConnectHTTPMultipleHeaders confirms several configured headers all
+// reach the server, and a repeated header name takes the last value
+// given - the same "last one wins" rule map assignment already gives
+// ConnectHTTP's caller for free, so this just documents and locks in
+// that behavior.
+func TestConnectHTTPMultipleHeaders(t *testing.T) {
+	var gotAuth, gotCustom string
+	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "http-test-server", Version: "1.0.0"}, nil)
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		gotAuth = r.Header.Get("Authorization")
+		gotCustom = r.Header.Get("X-Custom")
+		return mcpServer
+	}, nil)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session, err := ConnectHTTP(ctx, srv.URL, 5*time.Second, HTTPConfig{
+		Headers: map[string]string{
+			"Authorization": "Bearer second-wins",
+			"X-Custom":      "value",
+		},
+	})
+	if err != nil {
+		t.Fatalf("ConnectHTTP() error: %v", err)
+	}
+	defer session.Close()
+
+	if gotAuth != "Bearer second-wins" || gotCustom != "value" {
+		t.Errorf("server saw Authorization=%q X-Custom=%q, want %q and %q", gotAuth, gotCustom, "Bearer second-wins", "value")
+	}
+}

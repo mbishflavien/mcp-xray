@@ -69,10 +69,13 @@ func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cf
 
 	dialer := &net.Dialer{Timeout: timeout}
 	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext:           dialer.DialContext,
-			TLSHandshakeTimeout:   timeout,
-			ResponseHeaderTimeout: timeout,
+		Transport: &headerInjectingTransport{
+			base: &http.Transport{
+				DialContext:           dialer.DialContext,
+				TLSHandshakeTimeout:   timeout,
+				ResponseHeaderTimeout: timeout,
+			},
+			headers: cfg.Headers,
 		},
 	}
 
