@@ -2,6 +2,7 @@ package inspector
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -20,6 +21,11 @@ type HTTPConfig struct {
 	// build this map from repeated "Name: value" flags with
 	// ParseHeaderFlag.
 	Headers map[string]string
+
+	// InsecureSkipTLSVerify disables TLS certificate verification.
+	// Default false; only ever meant for a server under the operator's
+	// own control using a self-signed certificate.
+	InsecureSkipTLSVerify bool
 }
 
 // ParseHeaderFlag parses a "Name: value" string into a header name and
@@ -75,6 +81,7 @@ func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cf
 				DialContext:           dialer.DialContext,
 				TLSHandshakeTimeout:   timeout,
 				ResponseHeaderTimeout: timeout,
+				TLSClientConfig:       &tls.Config{InsecureSkipVerify: cfg.InsecureSkipTLSVerify},
 			},
 			headers: cfg.Headers,
 		},
