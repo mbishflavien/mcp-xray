@@ -2,6 +2,7 @@ package inspector
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -22,4 +23,17 @@ func ParseHeaderFlag(raw string) (name, value string, err error) {
 		return "", "", fmt.Errorf("header %q: name or value contains a CR or LF byte", raw)
 	}
 	return name, value, nil
+}
+
+// validateHTTPEndpoint checks that endpoint parses as a URL with an http
+// or https scheme, before anything tries to connect to it.
+func validateHTTPEndpoint(endpoint string) (*url.URL, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("unsupported scheme %q (must be http or https)", parsed.Scheme)
+	}
+	return parsed, nil
 }

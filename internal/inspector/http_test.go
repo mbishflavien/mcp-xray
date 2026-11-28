@@ -45,3 +45,26 @@ func TestParseHeaderFlagRejectsCRInName(t *testing.T) {
 		t.Error("expected an error for a header name containing CRLF, got nil")
 	}
 }
+
+func TestValidateHTTPEndpoint(t *testing.T) {
+	if _, err := validateHTTPEndpoint("https://example.com/mcp"); err != nil {
+		t.Errorf("validateHTTPEndpoint() error: %v", err)
+	}
+	if _, err := validateHTTPEndpoint("http://localhost:8080"); err != nil {
+		t.Errorf("validateHTTPEndpoint() error: %v", err)
+	}
+}
+
+func TestValidateHTTPEndpointRejectsBadScheme(t *testing.T) {
+	for _, endpoint := range []string{"ftp://example.com", "file:///etc/passwd", "ws://example.com"} {
+		if _, err := validateHTTPEndpoint(endpoint); err == nil {
+			t.Errorf("validateHTTPEndpoint(%q): want an error, got nil", endpoint)
+		}
+	}
+}
+
+func TestValidateHTTPEndpointRejectsMalformedURL(t *testing.T) {
+	if _, err := validateHTTPEndpoint("http://exa mple.com"); err == nil {
+		t.Error("validateHTTPEndpoint() with a malformed URL: want an error, got nil")
+	}
+}
