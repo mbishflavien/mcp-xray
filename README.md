@@ -132,6 +132,46 @@ Still missing: the live terminal dashboard; and caching the compiled WASI
 module across probe runs (every sandboxed call currently recompiles it,
 which is correct but slow).
 
+### The HTTP transport
+
+`internal/inspector.ConnectHTTP` connects over the MCP Streamable HTTP
+transport (`--url`) instead of spawning a command over stdio
+(`ConnectCommand`). Every probe, the safety policy, and the report
+pipeline are transport-agnostic - `Session` wraps an `*mcp.ClientSession`
+regardless of which `mcp.Transport` opened it - so nothing above
+`internal/inspector` needed to change.
+
+The threat model here is different from every other probe's: the hostile
+input isn't the target's JSON-RPC content, it's the target's raw HTTP
+behavior. `ConnectHTTP` treats the server being scanned as fully
+adversarial at the transport level too:
+
+- Explicit `DialContext`/`TLSHandshakeTimeout`/`ResponseHeaderTimeout`
+  (reusing `--timeout`) instead of net/http's unbounded defaults, so a
+  server that never completes a handshake or never sends headers can't
+  hang the scan indefinitely. Verified against a handler that never
+  responds: the attempt fails in `--timeout`, not whatever the context
+  deadline happens to be.
+- Redirects are refused outright (`CheckRedirect` always errors), not
+  just capped - a redirected request would otherwise carry whatever
+  `-header` values were configured (a bearer token, say) to a
+  server-chosen host.
+- The standalone SSE stream is disabled (`DisableStandaloneSSE`):
+  mcp-xray takes one `Snapshot` up front and never acts on a
+  server-initiated message afterward, so there's no reason to hold open
+  one more long-lived connection a malicious server could otherwise use
+  against it.
+- Every response body is capped at 10MiB (`maxResponseBodyBytes`); unlike
+  the prompt-injection probe's `maxScanLen`, crossing this cap is a hard
+  error rather than a silent truncation, since truncating a JSON-RPC
+  response would just corrupt the message instead of degrading
+  gracefully.
+- `-header` values are validated (rejecting a CR/LF byte, which could
+  otherwise inject a second header or split the request) before any
+  connection is attempted, the same "fail fast with a clear error, don't
+  let net/http reject it late and confusingly" approach `--url`'s scheme
+  check takes too.
+
 ### Hardening against the server it's scanning
 
 mcp-xray's own threat model is that the MCP server being scanned may be
