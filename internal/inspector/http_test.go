@@ -398,3 +398,21 @@ func TestConnectHTTPRejectsSelfSignedCertByDefault(t *testing.T) {
 		t.Error("ConnectHTTP() against a self-signed cert with no opt-in: want an error, got nil")
 	}
 }
+
+// TestConnectHTTPInsecureSkipTLSVerify confirms the same self-signed
+// server connects successfully once the flag opts in.
+func TestConnectHTTPInsecureSkipTLSVerify(t *testing.T) {
+	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "tls-test-server", Version: "1.0.0"}, nil)
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)
+	srv := httptest.NewTLSServer(handler)
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session, err := ConnectHTTP(ctx, srv.URL, 5*time.Second, HTTPConfig{InsecureSkipTLSVerify: true})
+	if err != nil {
+		t.Fatalf("ConnectHTTP() with InsecureSkipTLSVerify: error: %v", err)
+	}
+	session.Close()
+}
