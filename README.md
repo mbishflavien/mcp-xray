@@ -182,6 +182,23 @@ means mcp-xray can no longer tell the real server from an
 attacker-in-the-middle impersonating it, which defeats the point of
 using HTTPS for this scan at all.
 
+Verified against `cmd/example-server -http`: `--url
+http://localhost:<port>` produces the exact same 23 findings, in the same
+order, as the equivalent stdio run against the same binary - including
+the full cascading-crash chain (`leaky_counter`'s `rate_limit_dos: crash`
+first, poisoning every tool and probe after it, exactly as documented
+above). Getting there surfaced a real bug, not just a transport
+difference: `probe.Classify` originally mapped *any* `*jsonrpc.Error` that
+wasn't `CodeInternalError` straight to `OutcomeToolError` (a healthy
+rejection, not reportable) - which also caught code -32005
+("rejected by transport"), the code go-sdk's Streamable HTTP client uses
+to wrap a dead connection or a dial failure so one failed call doesn't
+tear down the whole session. A server dying mid-scan over HTTP read as a
+healthy rejection on every call afterward instead of the crash it
+actually was, silently hiding exactly the kind of finding mcp-xray exists
+to catch. Fixed by classifying that specific code as `OutcomeCrash`
+before the generic JSON-RPC-error branch runs.
+
 ### Hardening against the server it's scanning
 
 mcp-xray's own threat model is that the MCP server being scanned may be
