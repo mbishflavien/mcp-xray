@@ -3,9 +3,11 @@ package inspector
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -52,13 +54,27 @@ func validateHTTPEndpoint(endpoint string) (*url.URL, error) {
 }
 
 // ConnectHTTP connects to an MCP server reachable over HTTP, using the
-// MCP Streamable HTTP transport.
-func ConnectHTTP(ctx context.Context, endpoint string, cfg HTTPConfig) (*Session, error) {
+// MCP Streamable HTTP transport. timeout bounds dialing, the TLS
+// handshake, and waiting for response headers on every request the
+// resulting session makes - deliberately explicit rather than left to
+// net/http's unbounded defaults, since a malicious or compromised target
+// could otherwise hang any of those stages indefinitely. It does not
+// bound how long a call's body takes to finish sending or being read;
+// callers already bound that themselves via ctx, exactly as
+// ConnectCommand's callers do today.
+func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cfg HTTPConfig) (*Session, error) {
 	if _, err := validateHTTPEndpoint(endpoint); err != nil {
 		return nil, fmt.Errorf("connect to %s: %w", endpoint, err)
 	}
 
-	client := &http.Client{}
+	dialer := &net.Dialer{Timeout: timeout}
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext:           dialer.DialContext,
+			TLSHandshakeTimeout:   timeout,
+			ResponseHeaderTimeout: timeout,
+		},
+	}
 
 	s, err := Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: client})
 	if err != nil {

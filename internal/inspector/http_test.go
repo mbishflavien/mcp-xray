@@ -104,7 +104,7 @@ func TestConnectHTTP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	session, err := ConnectHTTP(ctx, srv.URL, HTTPConfig{})
+	session, err := ConnectHTTP(ctx, srv.URL, 5*time.Second, HTTPConfig{})
 	if err != nil {
 		t.Fatalf("ConnectHTTP() error: %v", err)
 	}
@@ -132,7 +132,39 @@ func TestConnectHTTPRejectsBadScheme(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	if _, err := ConnectHTTP(ctx, "ftp://example.com", HTTPConfig{}); err == nil {
+	if _, err := ConnectHTTP(ctx, "ftp://example.com", 5*time.Second, HTTPConfig{}); err == nil {
 		t.Error("ConnectHTTP() with a non-HTTP scheme: want an error, got nil")
+	}
+}
+
+// TestConnectHTTPResponseHeaderTimeout confirms a server that accepts the
+// connection but never sends response headers is bounded by timeout, not
+// left to hang for the lifetime of a much longer (or absent) context
+// deadline.
+func TestConnectHTTPResponseHeaderTimeout(t *testing.T) {
+	hang := make(chan struct{})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-hang
+	}))
+	// srv.Close blocks until every outstanding handler returns, so hang
+	// must close BEFORE srv.Close runs - t.Cleanup runs LIFO, so srv.Close
+	// is registered first (runs last) and closing hang is registered
+	// second (runs first).
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(hang) })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	_, err := ConnectHTTP(ctx, srv.URL, 500*time.Millisecond, HTTPConfig{})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("ConnectHTTP() against a server that never responds: want an error, got nil")
+	}
+	if elapsed > 10*time.Second {
+		t.Errorf("ConnectHTTP() took %v with a 500ms timeout; the 30s context deadline should never be the thing that fired", elapsed)
 	}
 }
