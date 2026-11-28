@@ -3,6 +3,7 @@ package inspector
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -113,4 +114,32 @@ func (t *headerInjectingTransport) RoundTrip(req *http.Request) (*http.Response,
 		}
 	}
 	return t.base.RoundTrip(req)
+}
+
+// maxResponseBodyBytes bounds how much of a single HTTP response body
+// ConnectHTTP's transport will ever read. Unlike maxScanLen (which caps a
+// prompt-injection scan input and silently truncates, since scanning a
+// prefix is still useful), truncating a JSON-RPC response body would
+// corrupt the message instead of degrading gracefully - so crossing this
+// cap is a hard error, not a silent truncation. It's a var, not a const,
+// so tests can exercise the cap without needing a genuinely huge body.
+var maxResponseBodyBytes int64 = 10 << 20 // 10MiB
+
+// cappedBody wraps a response body, failing with a clear error once more
+// than limit bytes have been read from it, rather than truncating
+// silently - see maxResponseBodyBytes for why a hard error is the right
+// call here.
+type cappedBody struct {
+	io.ReadCloser
+	limit int64
+	read  int64
+}
+
+func (b *cappedBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	b.read += int64(n)
+	if b.read > b.limit {
+		return n, fmt.Errorf("response body exceeded %d bytes", b.limit)
+	}
+	return n, err
 }

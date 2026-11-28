@@ -330,3 +330,29 @@ func TestConnectHTTPRefusesRedirect(t *testing.T) {
 		t.Error("ConnectHTTP() against a redirecting server: want an error, got nil")
 	}
 }
+
+// TestCappedBodyAllowsExactlyTheLimit confirms a body that is exactly
+// limit bytes long reads through cleanly with no error.
+func TestCappedBodyAllowsExactlyTheLimit(t *testing.T) {
+	data := strings.Repeat("a", 10)
+	body := &cappedBody{ReadCloser: io.NopCloser(strings.NewReader(data)), limit: 10}
+
+	got, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("ReadAll() error: %v", err)
+	}
+	if string(got) != data {
+		t.Errorf("got %q, want %q", got, data)
+	}
+}
+
+// TestCappedBodyErrorsPastTheLimit confirms a body one byte over the
+// limit fails with a clear error instead of being read in full.
+func TestCappedBodyErrorsPastTheLimit(t *testing.T) {
+	data := strings.Repeat("a", 11)
+	body := &cappedBody{ReadCloser: io.NopCloser(strings.NewReader(data)), limit: 10}
+
+	if _, err := io.ReadAll(body); err == nil {
+		t.Error("ReadAll() over an 11-byte body with limit=10: want an error, got nil")
+	}
+}
