@@ -82,3 +82,21 @@ func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cf
 	}
 	return s, nil
 }
+
+// headerInjectingTransport wraps a base http.RoundTripper to attach
+// configured headers (for example, Authorization) to every outgoing
+// request. A server being scanned never sees a header it wasn't given.
+type headerInjectingTransport struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (t *headerInjectingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if len(t.headers) > 0 {
+		req = req.Clone(req.Context())
+		for name, value := range t.headers {
+			req.Header.Set(name, value)
+		}
+	}
+	return t.base.RoundTrip(req)
+}

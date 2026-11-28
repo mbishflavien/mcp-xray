@@ -2,13 +2,27 @@ package inspector
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// fakeRoundTripper records the request it received and returns a fixed,
+// empty-body response, so headerInjectingTransport's own logic can be
+// tested directly without a real network call.
+type fakeRoundTripper struct {
+	gotHeaders http.Header
+}
+
+func (f *fakeRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	f.gotHeaders = req.Header
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(""))}, nil
+}
 
 // startTestHTTPServer serves a tiny real MCP server (one "greet" tool,
 // the same shape as inspector_test.go's startTestServer) over the MCP
@@ -166,5 +180,46 @@ func TestConnectHTTPResponseHeaderTimeout(t *testing.T) {
 	}
 	if elapsed > 10*time.Second {
 		t.Errorf("ConnectHTTP() took %v with a 500ms timeout; the 30s context deadline should never be the thing that fired", elapsed)
+	}
+}
+
+// TestHeaderInjectingTransportSetsConfiguredHeaders confirms the
+// transport attaches every configured header to the request before
+// delegating to its base RoundTripper.
+func TestHeaderInjectingTransportSetsConfiguredHeaders(t *testing.T) {
+	base := &fakeRoundTripper{}
+	rt := &headerInjectingTransport{base: base, headers: map[string]string{"Authorization": "Bearer x", "X-Custom": "y"}}
+
+	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error: %v", err)
+	}
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip() error: %v", err)
+	}
+
+	if got := base.gotHeaders.Get("Authorization"); got != "Bearer x" {
+		t.Errorf("Authorization = %q, want %q", got, "Bearer x")
+	}
+	if got := base.gotHeaders.Get("X-Custom"); got != "y" {
+		t.Errorf("X-Custom = %q, want %q", got, "y")
+	}
+}
+
+// TestHeaderInjectingTransportNoHeadersConfigured confirms a nil/empty
+// header map doesn't touch the request at all.
+func TestHeaderInjectingTransportNoHeadersConfigured(t *testing.T) {
+	base := &fakeRoundTripper{}
+	rt := &headerInjectingTransport{base: base}
+
+	req, err := http.NewRequest(http.MethodGet, "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error: %v", err)
+	}
+	if _, err := rt.RoundTrip(req); err != nil {
+		t.Fatalf("RoundTrip() error: %v", err)
+	}
+	if len(base.gotHeaders) != 0 {
+		t.Errorf("gotHeaders = %v, want no headers set", base.gotHeaders)
 	}
 }
