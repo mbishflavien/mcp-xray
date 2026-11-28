@@ -248,6 +248,16 @@ pass found and fixed several gaps in that:
   evidence it reports is built from a small excerpt around the actual
   match rather than the whole response, so neither the scan itself nor
   the resulting report can be inflated by an oversized reply.
+- The HTTP transport treats the server being scanned as adversarial at
+  the transport level, not just in its JSON-RPC content: explicit
+  dial/TLS-handshake/response-header timeouts instead of net/http's
+  unbounded defaults, redirects refused outright (not just capped, since
+  a configured `-header` value would otherwise follow one to a
+  server-chosen host), the standalone SSE stream disabled (nothing
+  mcp-xray does needs a server-initiated message mid-scan), and every
+  response body capped at 10MiB (`maxResponseBodyBytes`) with a hard
+  error rather than a silent truncation, since truncating a JSON-RPC
+  body would corrupt it instead of degrading gracefully.
 
 ## Getting started
 
