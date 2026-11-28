@@ -59,10 +59,12 @@ The auth-bypass probe (`internal/probes/authbypass`) finds candidate fields
 by name (`account_id`, `role`, `token`, and similar) rather than by any real
 understanding of a tool's authorization model, so it can both miss a real
 bypass hiding behind an oddly-named field and flag a field that only looks
-identity-shaped. There's also no real credential to strip yet, since
-HTTP/Streamable transport (where a bearer token would actually live) doesn't
-exist - it tests the one thing that's testable against a stdio tool server
-today: whether an implausible argument value is honored instead of rejected.
+identity-shaped. It still only forges values inside a tool's *arguments* -
+even now that a real credential-bearing transport exists (`--url` with
+`-header "Authorization: ..."`), there's no probe yet that tries stripping
+or tampering with a transport-level credential; it tests the one thing
+that's testable today regardless of transport: whether an implausible
+argument value is honored instead of rejected.
 Verified against `get_account` in `cmd/example-server`, a tool that returns
 account data for whatever `account_id` and `role` it's given with no check
 at all - both a High `auth_bypass_identity` and a High `auth_bypass_privilege`
