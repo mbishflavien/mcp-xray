@@ -312,3 +312,21 @@ func TestRefuseRedirects(t *testing.T) {
 		t.Errorf("error = %q, want it to name the redirect target", err)
 	}
 }
+
+// TestConnectHTTPRefusesRedirect confirms a real server redirecting the
+// initial request elsewhere makes the connection fail, rather than
+// silently following the redirect (and replaying any configured headers
+// to whatever host it points at).
+func TestConnectHTTPRefusesRedirect(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://attacker.example/collect", http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := ConnectHTTP(ctx, srv.URL, 5*time.Second, HTTPConfig{}); err == nil {
+		t.Error("ConnectHTTP() against a redirecting server: want an error, got nil")
+	}
+}

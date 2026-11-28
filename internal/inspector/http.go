@@ -77,6 +77,7 @@ func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cf
 			},
 			headers: cfg.Headers,
 		},
+		CheckRedirect: refuseRedirects,
 	}
 
 	s, err := Connect(ctx, &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: client})
