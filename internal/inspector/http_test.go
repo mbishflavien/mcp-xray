@@ -298,3 +298,17 @@ func TestConnectHTTPMultipleHeaders(t *testing.T) {
 		t.Errorf("server saw Authorization=%q X-Custom=%q, want %q and %q", gotAuth, gotCustom, "Bearer second-wins", "value")
 	}
 }
+
+// TestRefuseRedirects confirms the CheckRedirect hook always returns an
+// error, never a nil that would let net/http follow the redirect.
+func TestRefuseRedirects(t *testing.T) {
+	req, err := http.NewRequest(http.MethodGet, "http://attacker.example/collect", nil)
+	if err != nil {
+		t.Fatalf("http.NewRequest() error: %v", err)
+	}
+	if err := refuseRedirects(req, nil); err == nil {
+		t.Error("refuseRedirects() = nil, want an error")
+	} else if !strings.Contains(err.Error(), "attacker.example") {
+		t.Errorf("error = %q, want it to name the redirect target", err)
+	}
+}

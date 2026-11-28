@@ -86,6 +86,16 @@ func ConnectHTTP(ctx context.Context, endpoint string, timeout time.Duration, cf
 	return s, nil
 }
 
+// refuseRedirects always refuses to follow a redirect. The server being
+// scanned could otherwise redirect a request elsewhere - possibly to a
+// host that shouldn't receive whatever headers headerInjectingTransport
+// attaches to every request (a bearer token, say) - so mcp-xray never
+// follows one silently: it fails the connection with a clear error
+// instead.
+func refuseRedirects(req *http.Request, _ []*http.Request) error {
+	return fmt.Errorf("refusing to follow redirect to %s", req.URL)
+}
+
 // headerInjectingTransport wraps a base http.RoundTripper to attach
 // configured headers (for example, Authorization) to every outgoing
 // request. A server being scanned never sees a header it wasn't given.
