@@ -50,8 +50,10 @@ func run(args []string) (int, error) {
 	allowDestructive := fs.Bool("allow-destructive", false, "disable the destructive-tool-name safety gate entirely")
 	var allowTools repeatableFlag
 	fs.Var(&allowTools, "allow-tool", "allow calling this tool even if its name looks destructive (repeatable)")
+	url := fs.String("url", "", "connect to an MCP server over HTTP at this URL, instead of starting a command over stdio")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "usage: mcp-xray [flags] -- <command to start the MCP server> [args...]")
+		fmt.Fprintln(fs.Output(), "       mcp-xray [flags] -url <http(s) endpoint> --")
 		fs.PrintDefaults()
 	}
 
@@ -63,8 +65,12 @@ func run(args []string) (int, error) {
 		return 0, err
 	}
 	serverCmd := args[splitAt+1:]
-	if len(serverCmd) == 0 {
-		return 0, fmt.Errorf("no server command given after --")
+
+	if *url == "" && len(serverCmd) == 0 {
+		return 0, fmt.Errorf("no server command given after -- (or pass -url to connect over HTTP instead)")
+	}
+	if *url != "" && len(serverCmd) > 0 {
+		return 0, fmt.Errorf("-url and a command after -- are mutually exclusive; give exactly one")
 	}
 
 	outputFormat, err := report.ParseFormat(*format)
@@ -79,7 +85,12 @@ func run(args []string) (int, error) {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
-	session, err := inspector.ConnectCommand(ctx, serverCmd[0], serverCmd[1:]...)
+	var session *inspector.Session
+	if *url != "" {
+		session, err = inspector.ConnectHTTP(ctx, *url, *timeout, inspector.HTTPConfig{})
+	} else {
+		session, err = inspector.ConnectCommand(ctx, serverCmd[0], serverCmd[1:]...)
+	}
 	if err != nil {
 		return 0, err
 	}
