@@ -2,7 +2,7 @@
 
 A security and compliance inspector for [MCP](https://modelcontextprotocol.io) servers.
 
-Point it at an MCP server over stdio and it:
+Point it at an MCP server - over stdio, or over HTTP (`--url`) - and it:
 
 - Introspects every tool, resource, and prompt the server advertises.
 - Generates adversarial payloads from each tool's input schema (type
