@@ -309,6 +309,8 @@ builtinprobes/       public: constructs mcp-xray's own probes as probe.Probe
 
 internal/
   inspector/         MCP client wrapper: connect, introspect, CallTool
+                     (inspector.go: stdio via ConnectCommand; http.go:
+                     the Streamable HTTP transport via ConnectHTTP)
   safety/            KeywordPolicy, the default destructive-tool-name gate
   probeproto/        JSON wire types shared between the host and sandboxed probes
   probes/            embeds compiled probe .wasm, runs it through the sandbox,
