@@ -269,6 +269,11 @@ go build -o bin/example-server ./cmd/example-server   # a minimal MCP server to 
 ./bin/mcp-xray -- ./bin/example-server
 ./bin/mcp-xray --format sarif --fail-on high -- ./bin/example-server
 ./bin/mcp-xray --allow-tool delete_all_records -- ./bin/example-server
+
+# or point it at an MCP server over HTTP instead of a stdio command:
+./bin/example-server -http :8080 &
+./bin/mcp-xray --url http://localhost:8080 --
+./bin/mcp-xray --url https://example.com/mcp -header "Authorization: Bearer $TOKEN" --
 ```
 
 `go test ./...` instantiates a fresh WASI runtime per sandboxed call (no
