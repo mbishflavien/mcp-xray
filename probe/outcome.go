@@ -80,6 +80,17 @@ func (o Outcome) Reportable() bool {
 	return o != OutcomeToolError
 }
 
+// codeRejectedByTransport is the JSON-RPC error code the go-sdk's
+// Streamable HTTP client uses to wrap a transport-level failure (a dead
+// connection, a dial error, a non-2xx HTTP status with no JSON-RPC body)
+// as a *jsonrpc.Error - internally jsonrpc2.ErrRejected, which isn't
+// exported outside an internal package, so the code is checked directly
+// instead. Documented in the go-sdk's own source as "rejected by
+// transport" and stable (it's part of the wire-level contract between
+// the transport and the generic jsonrpc2 layer, not an implementation
+// detail likely to change silently).
+const codeRejectedByTransport = -32005
+
 // Classify turns a tool-call result/error pair into an Outcome. It never
 // silently drops an unrecognized failure: anything it doesn't specifically
 // recognize is treated as OutcomeCrash, since under-reporting a real
@@ -99,6 +110,20 @@ func Classify(result *mcp.CallToolResult, err error) Outcome {
 	}
 
 	if rpcErr, ok := errors.AsType[*jsonrpc.Error](err); ok {
+		if rpcErr.Code == codeRejectedByTransport {
+			// The call never reached the server, or its response never
+			// came back - a dead connection, a dial failure, a non-2xx
+			// HTTP status with no JSON-RPC body to explain it. The
+			// Streamable HTTP client wraps all of these as a *jsonrpc.Error
+			// with this code so the jsonrpc2 layer doesn't tear down the
+			// whole session over what might be transient - but from here,
+			// it's exactly the kind of connection failure OutcomeCrash
+			// exists for, not a tool's own validated rejection. Without
+			// this check, a server dying mid-scan over HTTP would read as
+			// a healthy "rejected the bad input" on every call afterward
+			// instead of the crash it actually is.
+			return OutcomeCrash
+		}
 		if rpcErr.Code == jsonrpc.CodeInternalError {
 			return OutcomeInternalError
 		}

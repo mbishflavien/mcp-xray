@@ -3,6 +3,7 @@ package probe
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 
@@ -47,6 +48,16 @@ func TestClassify(t *testing.T) {
 			name: "JSON-RPC invalid params, a healthy rejection",
 			err:  &jsonrpc.Error{Code: jsonrpc.CodeInvalidParams, Message: "bad arg"},
 			want: OutcomeToolError,
+		},
+		{
+			// Streamable HTTP's client wraps a dead connection, a dial
+			// failure, or an unexplained non-2xx HTTP status as exactly
+			// this *jsonrpc.Error - never a real response from the tool
+			// itself, so it must not be classified the same way a genuine
+			// rejection like CodeInvalidParams above is.
+			name: "HTTP transport rejected the call outright (dead connection)",
+			err:  fmt.Errorf("sending %q: rejected by transport: %w", "tools/call", &jsonrpc.Error{Code: codeRejectedByTransport, Message: "rejected by transport"}),
+			want: OutcomeCrash,
 		},
 		{
 			name:   "tool reported its own error",
